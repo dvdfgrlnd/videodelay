@@ -1,7 +1,7 @@
 if (true) {
     var data = [];
     var started = false;
-    var log = msg => div.innerHTML += "<br>" + msg;
+    var log = msg => console.log(msg); // document.querySelector("#logdiv").innerHTML += "<br>" + msg;
 
     var start = ms => navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "user" }} })
         .then(async (stream) => {
