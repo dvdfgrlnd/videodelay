@@ -2,7 +2,11 @@ var data = [];
 var started = false;
 var log = msg => console.log(msg); // document.querySelector("#logdiv").innerHTML += "<br>" + msg;
 
-navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+
+let window_height = document.documentElement.clientHeight;
+let window_width = document.documentElement.clientWidth;
+let aspect_ratio = window_width / window_height;
+navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", aspectRatio: 1 } })
   .then(async (stream) => {
     const delay = 2000;
     const mimeType = `video/webm; codecs="vp9"`;
@@ -20,15 +24,16 @@ navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
       }
       sourceBuffer.appendBuffer(await data.arrayBuffer());
     };
-    sourceBuffer.addEventListener("updateend", ()=>{
+    sourceBuffer.addEventListener("update", ()=>{
       if (
           video.buffered.length &&
           video.buffered.end(0) - video.buffered.start(0) > 35
       )
       {
+          let diff = video.buffered.end(0) - video.buffered.start(0);
           // Can't remove if video is short
           sourceBuffer.remove(0, video.buffered.end(0) - 35)
-          log("REMOVED");
+          log(`REMOVED. ${diff}`);
       }
     });
     video.pause();
