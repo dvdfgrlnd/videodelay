@@ -6,7 +6,13 @@ var log = msg => console.log(msg); // document.querySelector("#logdiv").innerHTM
 let window_height = document.documentElement.clientHeight;
 let window_width = document.documentElement.clientWidth;
 let aspect_ratio = window_width / window_height;
-navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", aspectRatio: 1 } })
+navigator.mediaDevices.getUserMedia({ video: {
+  facingMode: "user",
+  aspectRatio: 1,
+  min: 24,  // very important to define min value here
+  ideal: 24,
+  max: 25,
+} })
   .then(async (stream) => {
     const delay = 2000;
     const mimeType = `video/webm; codecs="vp9"`;
