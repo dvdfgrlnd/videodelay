@@ -60,7 +60,7 @@ setInterval(()=> {
     return;
   }
   let new_time = video.currentTime;
-  if(new_time >= last_video_time && new_time - last_video_time < 0.1) {
+  if(new_time >= last_video_time && new_time - last_video_time < 0.1 && new_time > 0) {
       log(`RESTART = ${new_time} - ${last_video_time}`);
       restartVideo();
   }
