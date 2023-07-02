@@ -1,6 +1,6 @@
 var data = [];
 var started = false;
-var log = msg => console.log(msg); // document.querySelector("#logdiv").innerHTML += "<br>" + msg;
+var log = msg => console.log(msg);
 
 
 var recorder = null;
@@ -13,22 +13,46 @@ delay_input.addEventListener("input", (event) => {
 });
 
 var deadlineTimeout = null;
+var last_delay_seconds = parseInt(delay_input.value);
+
+function restartVideo(){
+      var video = document.querySelector("video");
+      video.pause();
+      recorder.stop();
+
+      log(last_delay_seconds);
+      startRecording(last_delay_seconds);
+}
 delay_input.addEventListener("change", (event) => {
   if(recorder) {
     if(deadlineTimeout){
       clearTimeout(deadlineTimeout);
     }
     deadlineTimeout = setTimeout(()=>{
-      var video = document.querySelector("video");
-      video.pause();
-      recorder.stop();
-
-      const delay_seconds = parseInt(event.target.value)
-      log(delay_seconds);
-      startRecording(delay_seconds);
+      last_delay_seconds = parseInt(event.target.value);
+      restartVideo();
     }, 2000);
   }
 });
+
+var last_video_time = null;
+setInterval(()=> {
+  var video = document.querySelector("video");
+  if(video.paused) {
+    return;
+  }
+  if(last_video_time == null){
+    last_video_time = video.currentTime;
+    return;
+  }
+  let new_time = video.currentTime;
+  if(new_time - last_video_time < 0.1) {
+      log("RESTART");
+      restartVideo();
+  }
+  last_video_time = new_time;
+
+}, 1000)
 
 
 
@@ -62,7 +86,13 @@ async function startRecording(delaySeconds) {
     if (mediaSource.readyState !== "open" || !data.size) {
       return;
     }
-    sourceBuffer.appendBuffer(await data.arrayBuffer());
+    try {
+      sourceBuffer.appendBuffer(await data.arrayBuffer());
+    } catch (error) {
+      console.error(error);
+      log("sourcebuffer appendbuffer error. RESTART");
+      restartVideo();
+    }
   };
   sourceBuffer.addEventListener("update", () => {
     if (
@@ -71,8 +101,13 @@ async function startRecording(delaySeconds) {
     ) {
       let diff = video.buffered.end(0) - video.buffered.start(0);
       // Can't remove if video is short
-      sourceBuffer.remove(0, video.buffered.end(0) - 35)
-      log(`REMOVED. ${diff}`);
+      try {
+        sourceBuffer.remove(0, video.buffered.end(0) - 35)
+      } catch (error) {
+        console.error(error);
+        log("sourcebuffer appendbuffer error. RESTART");
+        restartVideo();
+      }
     }
   });
   video.pause();
