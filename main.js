@@ -108,22 +108,22 @@ async function startRecording(delaySeconds) {
       restartVideo();
     }
   };
-  sourceBuffer.addEventListener("update", () => {
-    if (
-      video.buffered.length &&
-      video.buffered.end(0) - video.buffered.start(0) > 35
-    ) {
-      let diff = video.buffered.end(0) - video.buffered.start(0);
-      // Can't remove if video is short
-      try {
-        sourceBuffer.remove(0, video.buffered.end(0) - 35)
-      } catch (error) {
-        console.error(error);
-        log("sourcebuffer appendbuffer error. RESTART");
-        restartVideo();
-      }
-    }
-  });
+  // sourceBuffer.addEventListener("update", () => {
+  //   if (
+  //     video.buffered.length &&
+  //     video.buffered.end(0) - video.buffered.start(0) > 35
+  //   ) {
+  //     let diff = video.buffered.end(0) - video.buffered.start(0);
+  //     // Can't remove if video is short
+  //     try {
+  //       sourceBuffer.remove(0, video.buffered.end(0) - 35)
+  //     } catch (error) {
+  //       console.error(error);
+  //       log("sourcebuffer appendbuffer error. RESTART");
+  //       restartVideo();
+  //     }
+  //   }
+  // });
   video.pause();
   recorder.start(50);
   setTimeout(() => {
