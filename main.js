@@ -80,7 +80,7 @@ async function startRecording(delaySeconds) {
   let stream = await navigator.mediaDevices.getUserMedia({
     video: {
       facingMode: "user",
-      aspectRatio: aspect_ratio,
+      aspectRatio: {exact: aspect_ratio},
       // min: 24,  // very important to define min value here
       // ideal: 24,
       // max: 25,
