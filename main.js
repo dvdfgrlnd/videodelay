@@ -12,16 +12,30 @@ delay_input.addEventListener("input", (event) => {
   delay_value.textContent = event.target.value;
 });
 
+function switchVideoVisibility() {
+  var video = document.querySelector("video");
+  var videoloader = document.querySelector("#videoloader");
+
+  let style = window.getComputedStyle(video);
+  let is_hidden = style.display === "none";
+
+  // Switch visibility
+  videoloader.style.display = is_hidden ? "none" : "block";
+  video.style.display = is_hidden ? "block" : "none";
+}
+
 var deadlineTimeout = null;
 var last_delay_seconds = parseInt(delay_input.value);
 
 function restartVideo(){
-      var video = document.querySelector("video");
-      video.pause();
-      recorder.stop();
+  switchVideoVisibility();
 
-      log(last_delay_seconds);
-      startRecording(last_delay_seconds);
+  var video = document.querySelector("video");
+  video.pause();
+  recorder.stop();
+
+  log(last_delay_seconds);
+  startRecording(last_delay_seconds);
 }
 delay_input.addEventListener("change", (event) => {
   if(recorder) {
@@ -46,8 +60,8 @@ setInterval(()=> {
     return;
   }
   let new_time = video.currentTime;
-  if(new_time - last_video_time < 0.1) {
-      log("RESTART");
+  if(new_time >= last_video_time && new_time - last_video_time < 0.1) {
+      log(`RESTART = ${new_time} - ${last_video_time}`);
       restartVideo();
   }
   last_video_time = new_time;
@@ -112,7 +126,10 @@ async function startRecording(delaySeconds) {
   });
   video.pause();
   recorder.start(50);
-  setTimeout(() => video.play(), delay);
+  setTimeout(() => {
+    video.play()
+    switchVideoVisibility();
+  }, delay);
 }
 
 startRecording(parseInt(delay_input.value)).then(()=> {}).catch(log);

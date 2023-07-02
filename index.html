@@ -3,43 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>My test page</title>
-    <style>
-        html, body {
-          margin: 0;
-          width: calc(100vw - (100vw - 100%));;
-          height: 100vh;
-          overflow: hidden;
-        }
-        #container {
-          display: flex;
-          flex-direction: column;
-          height: 100%;
-        }
-        #delaycontainer {
-          display: flex;
-          flex-direction: row;
-          flex-shrink: 1;
-          padding: 1vh;
-          gap: 1vh;
-          font-family: Tahoma, sans-serif;
-        }
-        #delayvalue {
-          flex-grow: 0;
-        }
-        #delayseconds {
-          flex-grow: 1;
-        }
-        #videocontainer {
-          display: inline;
-          flex-grow: 1;
-        }
-        video {
-          width: 100%;
-          /* height: 100%; */
-          object-fit: cover;
-        }
-    </style>
+    <title>VideoDelay</title>
+    <link rel="stylesheet" href="index.css">
   </head>
   <body>
     <script src="main.js" defer></script>
@@ -49,6 +14,9 @@
         <p>Delay = <output id="delayvalue"></output>s</p>
       </div>
       <div id="videocontainer">
+        <div id="videoloader">
+          <div class="lds-spinner"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+        </div>
         <video id="video"></video>
       </div>
     </div>
