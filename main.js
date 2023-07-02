@@ -81,9 +81,9 @@ async function startRecording(delaySeconds) {
     video: {
       facingMode: "user",
       aspectRatio: aspect_ratio,
-      min: 24,  // very important to define min value here
-      ideal: 24,
-      max: 25,
+      // min: 24,  // very important to define min value here
+      // ideal: 24,
+      // max: 25,
     }
   });
   const mimeType = `video/webm; codecs="vp9"`;
