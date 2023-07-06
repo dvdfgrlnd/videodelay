@@ -33,6 +33,14 @@ video {
     object-fit: cover;
     display: none;
 }
+#c1 {
+    display: none;
+}
+#c1,#c2 {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
 
 #videoloader {
     display: block;

@@ -1,0 +1,47 @@
+ <head>
+    <meta charset="UTF-8" />
+    <title>Video test page</title>
+    <style>
+      body {
+        background: black;
+        color: #cccccc;
+      }
+      #c2 {
+        background-image: url(media/foo.png);
+        background-repeat: no-repeat;
+      }
+      div {
+        float: left;
+        border: 1px solid #444444;
+        padding: 10px;
+        margin: 10px;
+        background: #3b3b3b;
+      }
+      video {
+        height: 30vh;
+        width: 30vw;
+        /* display: none; */
+      }
+      #c1 {
+        height: 30vh;
+        width: 30vw;
+        display: none;
+      }
+      #c2 {
+        height: 30vh;
+        width: 30vw;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div>
+      <video id="video" />
+    </div>
+    <div>
+      <canvas id="c1" ></canvas>
+      <canvas id="c2" ></canvas>
+    </div>
+    <script src="main2.js"></script>
+  </body>
+</html>

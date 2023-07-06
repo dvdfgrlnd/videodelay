@@ -1,9 +1,27 @@
-var data = [];
-var started = false;
-var log = msg => console.log(msg);
+let vheight = document.querySelector("#videocontainer").clientHeight;
+let vwidth = document.querySelector("#videocontainer").clientWidth;
+let aspect_ratio = vwidth / vheight;
 
+let ctx = document.querySelector("#c1")
+ctx.width = 1080*aspect_ratio;
+ctx.height = 1080;
+let c1 = ctx.getContext("2d", { willReadFrequently: true });
+c1.imageSmoothingEnabled = false;
 
-var recorder = null;
+let ctx2 = document.querySelector("#c2");
+ctx2.width = 1080*aspect_ratio;
+ctx2.height = 1080;
+let c2 = ctx2.getContext("2d");
+c2.imageSmoothingEnabled = false;
+
+let video = document.querySelector("#video");
+
+var yheight = 0;
+var ywidth = 0;
+
+var stored_frames = [];
+var starttime = Date.now()
+
 
 const delay_input = document.querySelector("#delayseconds");
 const delay_value = document.querySelector("#delayvalue");
@@ -12,124 +30,65 @@ delay_input.addEventListener("input", (event) => {
   delay_value.textContent = event.target.value;
 });
 
-function switchVideoVisibility() {
-  var video = document.querySelector("video");
-  var videoloader = document.querySelector("#videoloader");
-
-  let style = window.getComputedStyle(video);
-  let is_hidden = style.display === "none";
-
-  // Switch visibility
-  videoloader.style.display = is_hidden ? "none" : "block";
-  video.style.display = is_hidden ? "block" : "none";
-}
-
+var delay_seconds = parseInt(delay_input.value);
 var deadlineTimeout = null;
-var last_delay_seconds = parseInt(delay_input.value);
-
-function restartVideo(){
-  switchVideoVisibility();
-
-  var video = document.querySelector("video");
-  video.pause();
-  recorder.stop();
-
-  log(last_delay_seconds);
-  startRecording(last_delay_seconds);
-}
 delay_input.addEventListener("change", (event) => {
-  if(recorder) {
-    if(deadlineTimeout){
-      clearTimeout(deadlineTimeout);
-    }
-    deadlineTimeout = setTimeout(()=>{
-      last_delay_seconds = parseInt(event.target.value);
-      restartVideo();
-    }, 2000);
+  if(deadlineTimeout){
+    clearTimeout(deadlineTimeout);
   }
+  deadlineTimeout = setTimeout(()=>{
+    let new_delay_seconds = parseInt(event.target.value);
+    if(delay_seconds === new_delay_seconds){
+      return;
+    }
+    delay_seconds = new_delay_seconds;
+    console.log(`Delay = ${delay_seconds}`);
+    stored_frames = [];
+    starttime = Date.now();
+  }, 1500);
 });
 
-var last_video_time = null;
-setInterval(()=> {
-  var video = document.querySelector("video");
-  if(video.paused) {
-    return;
+// ctx.style.display = 'none'
+
+
+function f() {
+  c1.drawImage(video, 0, 0, ctx.width, ctx.height);
+  const frame = c1.getImageData(0, 0, ctx.width, ctx.height);
+  stored_frames.push(frame);
+  if(Date.now() - starttime >= (delay_seconds*1000)) {
+    let oldframe = stored_frames.shift();
+    c2.putImageData(oldframe, 0, 0);
   }
-  if(last_video_time == null){
-    last_video_time = video.currentTime;
-    return;
-  }
-  let new_time = video.currentTime;
-  if(new_time >= last_video_time && new_time - last_video_time < 0.1 && new_time > 0) {
-      log(`RESTART = ${new_time} - ${last_video_time}`);
-      restartVideo();
-  }
-  last_video_time = new_time;
 
-}, 1000)
+  requestAnimationFrame(f);
+}
 
 
-
-let window_height = document.querySelector("#videocontainer").clientHeight;
-let window_width = document.querySelector("#videocontainer").clientWidth;
-console.log(window_height, window_width);
-let aspect_ratio = window_width / window_height;
-
-async function startRecording(delaySeconds) {
-  let delay = delaySeconds * 1000
+async function start() {
   let stream = await navigator.mediaDevices.getUserMedia({
     video: {
       facingMode: "user",
       aspectRatio: {exact: aspect_ratio},
-      // min: 24,  // very important to define min value here
-      // ideal: 24,
-      // max: 25,
+      min: 24,  // very important to define min value here
+      ideal: 60,
+      max: 120,
     }
   });
-  const mimeType = `video/webm; codecs="vp9"`;
-  const mediaSource = new MediaSource();
-  var video = document.querySelector("video");
-  video.src = URL.createObjectURL(mediaSource);
-  await new Promise((res) =>
-    mediaSource.addEventListener("sourceopen", res, { once: true })
-  );
-  const sourceBuffer = mediaSource.addSourceBuffer(mimeType);
-  sourceBuffer.mode = "sequence";
-  recorder = new MediaRecorder(stream, { mimeType });
-  recorder.ondataavailable = async ({ data }) => {
-    if (mediaSource.readyState !== "open" || !data.size) {
-      return;
-    }
-    try {
-      sourceBuffer.appendBuffer(await data.arrayBuffer());
-    } catch (error) {
-      console.error(error);
-      log("sourcebuffer appendbuffer error. RESTART");
-      restartVideo();
-    }
-  };
-  // sourceBuffer.addEventListener("update", () => {
-  //   if (
-  //     video.buffered.length &&
-  //     video.buffered.end(0) - video.buffered.start(0) > 35
-  //   ) {
-  //     let diff = video.buffered.end(0) - video.buffered.start(0);
-  //     // Can't remove if video is short
-  //     try {
-  //       sourceBuffer.remove(0, video.buffered.end(0) - 35)
-  //     } catch (error) {
-  //       console.error(error);
-  //       log("sourcebuffer appendbuffer error. RESTART");
-  //       restartVideo();
-  //     }
-  //   }
-  // });
-  video.pause();
-  recorder.start(50);
-  setTimeout(() => {
-    video.play()
-    switchVideoVisibility();
-  }, delay);
+  video.addEventListener( "loadedmetadata", function (e) {
+    console.log("START");
+    ywidth = this.videoWidth;
+    yheight = this.videoHeight;
+    console.log(ywidth, yheight);
+    f();
+  }, false );
+
+  video.srcObject = stream;
+  video.play()
+  video.style.display = 'none';
+  starttime = Date.now();
+
 }
 
-startRecording(parseInt(delay_input.value)).then(()=> {}).catch(log);
+start()
+  .then((r) => console.log(r))
+  .catch((err) => console.error(err));
