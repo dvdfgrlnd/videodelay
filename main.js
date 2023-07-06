@@ -22,6 +22,18 @@ var ywidth = 0;
 var stored_frames = [];
 var starttime = Date.now()
 
+function switchVideoVisibility() {
+  var canvas = document.querySelector("#c2");
+  var videoloader = document.querySelector("#videoloader");
+
+  let style = window.getComputedStyle(canvas);
+  let is_hidden = style.display === "none";
+
+  // Switch visibility
+  videoloader.style.display = is_hidden ? "none" : "block";
+  canvas.style.display = is_hidden ? "block" : "none";
+}
+
 
 const delay_input = document.querySelector("#delayseconds");
 const delay_value = document.querySelector("#delayvalue");
@@ -41,10 +53,14 @@ delay_input.addEventListener("change", (event) => {
     if(delay_seconds === new_delay_seconds){
       return;
     }
+    switchVideoVisibility()
     delay_seconds = new_delay_seconds;
     console.log(`Delay = ${delay_seconds}`);
     stored_frames = [];
     starttime = Date.now();
+    setTimeout(()=>{
+      switchVideoVisibility()
+    }, delay_seconds*1000)
   }, 1500);
 });
 
@@ -86,6 +102,10 @@ async function start() {
   video.play()
   video.style.display = 'none';
   starttime = Date.now();
+
+  setTimeout(()=>{
+    switchVideoVisibility()
+  }, delay_seconds*1000)
 
 }
 
