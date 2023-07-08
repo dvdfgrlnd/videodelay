@@ -15,6 +15,8 @@ let c2 = ctx2.getContext("2d");
 c2.imageSmoothingEnabled = false;
 
 let video = document.querySelector("#video");
+video.muted = true;
+video.playsinline = true;
 
 var yheight = 0;
 var ywidth = 0;
