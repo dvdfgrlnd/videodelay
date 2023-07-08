@@ -106,9 +106,15 @@ async function start() {
   setTimeout(()=>{
     switchVideoVisibility()
   }, delay_seconds*1000)
-
 }
 
-start()
-  .then((r) => console.log(r))
-  .catch((err) => console.error(err));
+document.querySelector("#startmessage").addEventListener("click", async ()=>{
+  console.log("PLAY");
+  let d = document.querySelector("#startmessage");
+  d.style.display = 'none';
+  start()
+    .then((r) => console.log(r))
+    .catch((err) => console.error(err));
+});
+
+

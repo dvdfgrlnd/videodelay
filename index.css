@@ -48,6 +48,11 @@ video {
     width: 10vw;
 }
 
+#startmessage > p {
+    font-size:3em; 
+    text-align: center;
+}
+
 
 
 .lds-spinner {
