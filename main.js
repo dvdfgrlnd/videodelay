@@ -27,6 +27,9 @@ var source_height = 0;
 
 var stored_frames = [];
 var starttime = Date.now()
+var stream = null;
+
+var pause = false;
 
 function switchVideoVisibility() {
   var canvas = document.querySelector("#c2");
@@ -39,6 +42,22 @@ function switchVideoVisibility() {
   videoloader.style.display = is_hidden ? "none" : "block";
   canvas.style.display = is_hidden ? "block" : "none";
 }
+
+document.addEventListener("click", () => {
+  let b = document.querySelector("#toggleswitch");
+  if (video.paused) {
+    // Start video
+    b.textContent = "PAUSE";
+    pause = false;
+    start_stream();
+  } else {
+    b.textContent = "PLAY";
+    pause = true;
+    stop_stream();
+    stored_frames = [];
+    switchVideoVisibility();
+  }
+});
 
 
 const delay_input = document.querySelector("#delayseconds");
@@ -81,21 +100,13 @@ function f() {
     c2.putImageData(oldframe, 0, 0);
   }
 
+  if(pause){
+    return;
+  }
   requestAnimationFrame(f);
 }
 
-
-async function start() {
-  let stream = await navigator.mediaDevices.getUserMedia({
-    video: {
-      facingMode: "user",
-      // aspectRatio: {exact: aspect_ratio},
-      min: 24,  // very important to define min value here
-      ideal: 60,
-      max: 120,
-    }
-  });
-  video.addEventListener("loadedmetadata", function (e) {
+function init_stream(e) {
     console.log("START");
     video_width = this.videoWidth;
     video_height = this.videoHeight;
@@ -106,7 +117,26 @@ async function start() {
     source_height = video_height;
 
     f();
-  }, false);
+  }
+
+function stop_stream(){
+  stream.getTracks().forEach(track => track.stop());
+  video.removeEventListener("loadedmetadata", init_stream);
+  video.pause();
+  video.currentTime = 0;
+}
+
+async function start_stream() {
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: "user",
+      // aspectRatio: {exact: aspect_ratio},
+      min: 24,  // very important to define min value here
+      ideal: 60,
+      max: 120,
+    }
+  });
+  video.addEventListener("loadedmetadata", init_stream, false);
 
   video.srcObject = stream;
   video.play()
@@ -123,7 +153,7 @@ function startStream() {
   console.log("PLAY");
   let d = document.querySelector("#startmessage");
   d.style.display = 'none';
-  start()
+  start_stream()
     .then((r) => console.log(r))
     .catch((err) => console.error(err));
 }
