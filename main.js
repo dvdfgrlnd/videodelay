@@ -43,15 +43,15 @@ function switchVideoVisibility() {
   canvas.style.display = is_hidden ? "block" : "none";
 }
 
-document.addEventListener("click", () => {
-  let b = document.querySelector("#toggleswitch");
+let pause_button = document.querySelector("#toggleswitch");
+pause_button.addEventListener("click", () => {
   if (video.paused) {
     // Start video
-    b.textContent = "PAUSE";
+    pause_button.textContent = "PAUSE";
     pause = false;
     start_stream();
   } else {
-    b.textContent = "PLAY";
+    pause_button.textContent = "PLAY";
     pause = true;
     stop_stream();
     stored_frames = [];
