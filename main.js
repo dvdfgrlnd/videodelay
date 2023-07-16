@@ -168,3 +168,12 @@ if (window.location.hostname === "localhost" || window.location.hostname === "12
 }
 
 
+window.onerror = function(msg, url, line, col, error) {
+    let err = "A fatal exception has occurred. The application will now reload.\nException details -> " + msg + "\nUrl: " + url + "\nLine: " + line + '\nColumn: ' + col + '\nError: ' + error;
+    console.error(err);
+    if (!(navigator.userAgent.match("FxiOS") && msg === "Script error.")) {
+      alert(err);
+      location.reload();
+    }
+    return true;
+  }
