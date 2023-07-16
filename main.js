@@ -3,13 +3,13 @@ let vwidth = document.querySelector("#videocontainer").clientWidth;
 let aspect_ratio = vwidth / vheight;
 
 let ctx = document.querySelector("#c1")
-ctx.width = 1080*aspect_ratio;
+ctx.width = 1080 * aspect_ratio;
 ctx.height = 1080;
 let c1 = ctx.getContext("2d", { willReadFrequently: true });
 c1.imageSmoothingEnabled = false;
 
 let ctx2 = document.querySelector("#c2");
-ctx2.width = 1080*aspect_ratio;
+ctx2.width = 1080 * aspect_ratio;
 ctx2.height = 1080;
 let c2 = ctx2.getContext("2d");
 c2.imageSmoothingEnabled = false;
@@ -18,8 +18,12 @@ let video = document.querySelector("#video");
 video.muted = true;
 video.playsinline = true;
 
-var yheight = 0;
-var ywidth = 0;
+var video_height = 0;
+var video_width = 0;
+var source_left = 0;
+var source_top = 0;
+var source_width = 0;
+var source_height = 0;
 
 var stored_frames = [];
 var starttime = Date.now()
@@ -47,12 +51,12 @@ delay_input.addEventListener("input", (event) => {
 var delay_seconds = parseInt(delay_input.value);
 var deadlineTimeout = null;
 delay_input.addEventListener("change", (event) => {
-  if(deadlineTimeout){
+  if (deadlineTimeout) {
     clearTimeout(deadlineTimeout);
   }
-  deadlineTimeout = setTimeout(()=>{
+  deadlineTimeout = setTimeout(() => {
     let new_delay_seconds = parseInt(event.target.value);
-    if(delay_seconds === new_delay_seconds){
+    if (delay_seconds === new_delay_seconds) {
       return;
     }
     switchVideoVisibility()
@@ -60,20 +64,19 @@ delay_input.addEventListener("change", (event) => {
     console.log(`Delay = ${delay_seconds}`);
     stored_frames = [];
     starttime = Date.now();
-    setTimeout(()=>{
+    setTimeout(() => {
       switchVideoVisibility()
-    }, delay_seconds*1000)
+    }, delay_seconds * 1000)
   }, 1500);
 });
 
-// ctx.style.display = 'none'
-
 
 function f() {
-  c1.drawImage(video, 0, 0, ctx.width, ctx.height);
+  c1.drawImage(video, source_left, source_top, source_width, source_height, 0, 0, ctx.width, ctx.height);
+
   const frame = c1.getImageData(0, 0, ctx.width, ctx.height);
   stored_frames.push(frame);
-  if(Date.now() - starttime >= (delay_seconds*1000)) {
+  if (Date.now() - starttime >= (delay_seconds * 1000)) {
     let oldframe = stored_frames.shift();
     c2.putImageData(oldframe, 0, 0);
   }
@@ -86,37 +89,52 @@ async function start() {
   let stream = await navigator.mediaDevices.getUserMedia({
     video: {
       facingMode: "user",
-      aspectRatio: {exact: aspect_ratio},
+      // aspectRatio: {exact: aspect_ratio},
       min: 24,  // very important to define min value here
       ideal: 60,
       max: 120,
     }
   });
-  video.addEventListener( "loadedmetadata", function (e) {
+  video.addEventListener("loadedmetadata", function (e) {
     console.log("START");
-    ywidth = this.videoWidth;
-    yheight = this.videoHeight;
-    console.log(ywidth, yheight);
+    video_width = this.videoWidth;
+    video_height = this.videoHeight;
+
+    source_width = video_height * aspect_ratio;
+    source_left = (video_width - source_width) / 2;
+    source_top = 0;
+    source_height = video_height;
+
     f();
-  }, false );
+  }, false);
 
   video.srcObject = stream;
   video.play()
+
   video.style.display = 'none';
   starttime = Date.now();
 
-  setTimeout(()=>{
+  setTimeout(() => {
     switchVideoVisibility()
-  }, delay_seconds*1000)
+  }, delay_seconds * 1000)
 }
 
-document.querySelector("#startmessage").addEventListener("click", async ()=>{
+function startStream() {
   console.log("PLAY");
   let d = document.querySelector("#startmessage");
   d.style.display = 'none';
   start()
     .then((r) => console.log(r))
     .catch((err) => console.error(err));
+}
+
+document.querySelector("#startmessage").addEventListener("click", async () => {
+  startStream();
 });
+
+if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+  console.log("Auto start due to localhost");
+  startStream();
+}
 
 
