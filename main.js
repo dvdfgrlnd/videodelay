@@ -2,15 +2,16 @@ let vheight = document.querySelector("#videocontainer").clientHeight;
 let vwidth = document.querySelector("#videocontainer").clientWidth;
 let aspect_ratio = vwidth / vheight;
 
+let canvas_pixels = 720;
 let ctx = document.querySelector("#c1")
-ctx.width = 1080 * aspect_ratio;
-ctx.height = 1080;
+ctx.width = canvas_pixels * aspect_ratio;
+ctx.height = canvas_pixels;
 let c1 = ctx.getContext("2d", { willReadFrequently: true });
 c1.imageSmoothingEnabled = false;
 
 let ctx2 = document.querySelector("#c2");
-ctx2.width = 1080 * aspect_ratio;
-ctx2.height = 1080;
+ctx2.width = canvas_pixels * aspect_ratio;
+ctx2.height = canvas_pixels;
 let c2 = ctx2.getContext("2d");
 c2.imageSmoothingEnabled = false;
 
