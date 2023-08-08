@@ -129,6 +129,7 @@ function stop_stream(){
 
 async function start_stream() {
   stream = await navigator.mediaDevices.getUserMedia({
+    audio: true,
     video: {
       facingMode: "user",
       // aspectRatio: {exact: aspect_ratio},
@@ -138,6 +139,8 @@ async function start_stream() {
     }
   });
   video.addEventListener("loadedmetadata", init_stream, false);
+
+  start_microphone(stream);
 
   video.srcObject = stream;
   video.play()
@@ -166,6 +169,96 @@ document.querySelector("#startmessage").addEventListener("click", async () => {
 if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
   console.log("Auto start due to localhost");
   startStream();
+}
+
+
+function start_microphone(stream) {
+
+    var audioContext = new AudioContext();
+
+    let spectogramEl = document.getElementById("spectogram");
+    let spectogramCtx = spectogramEl.getContext("2d");
+    spectogramCtx.textBaseline = "top";
+    spectogramCtx.font = "24px serif";
+
+    let WIDTH = spectogramEl.width;
+    let HEIGHT = spectogramEl.height;
+
+    let microphone_stream = audioContext.createMediaStreamSource(stream);
+
+    var biquadFilter = audioContext.createBiquadFilter();
+    microphone_stream.connect(biquadFilter);
+    biquadFilter.type = "bandpass";
+    biquadFilter.frequency.value = 14000;
+    biquadFilter.gain.value = 25;
+
+    biquadFilter.connect(audioContext.destination);
+
+    let analyser_node = audioContext.createAnalyser();
+    analyser_node.smoothingTimeConstant = 0;
+    analyser_node.fftSize = 2048;
+
+    biquadFilter.connect(analyser_node);
+
+    var buffer_length = analyser_node.frequencyBinCount;
+
+    var array_freq_domain = new Uint8Array(buffer_length);
+
+    console.log("buffer_length " + buffer_length);
+
+    var buffer = [];
+    let threshold = 4000;
+    var max = 0;
+
+    var draw = function () {
+        requestAnimationFrame(draw);
+
+        analyser_node.getByteFrequencyData(array_freq_domain);
+
+        if (microphone_stream.playbackState == microphone_stream.PLAYING_STATE) {
+            let s = array_freq_domain.reduce((acc, v) => v + acc);
+
+            let dn = Date.now();
+            buffer.push([s, dn]);
+            if (buffer[buffer.length - 1][1] - buffer[0][1] > threshold) {
+                buffer.shift()
+            }
+
+            spectogramCtx.clearRect(0, 0, WIDTH, HEIGHT);
+            spectogramCtx.fillStyle = "rgb(200, 200, 200)";
+            spectogramCtx.fillRect(0, 0, WIDTH, HEIGHT);
+            spectogramCtx.lineWidth = 4;
+            spectogramCtx.strokeStyle = "rgb(0, 0, 0)";
+            spectogramCtx.beginPath();
+
+            max = Math.max(
+                buffer.reduce((acc, v) => Math.max(acc, v[0]), 0),
+                max
+            );
+            spectogramCtx.fillStyle = "rgb(0, 0, 0)";
+            spectogramCtx.fillText(`${max}`, 0, 0);
+
+            let ts = buffer[0][1];
+            for (let i = 1; i < buffer.length; i += 1) {
+                let x = ((buffer[i][1] - ts) / threshold) * WIDTH;
+                let v = buffer[i][0];
+                let y = HEIGHT - (v / max) * HEIGHT;
+                if (i === 1) {
+                    spectogramCtx.moveTo(x, y);
+                } else {
+                    spectogramCtx.lineTo(x, y);
+                }
+
+                if(v > max*0.5){
+                    spectogramCtx.fillText(`${v}`, x*0.01, y);
+                }
+            }
+
+            spectogramCtx.stroke();
+        }
+
+    }
+    draw();
 }
 
 
