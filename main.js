@@ -179,7 +179,7 @@ function start_microphone(stream) {
     let spectogramEl = document.getElementById("spectogram");
     let spectogramCtx = spectogramEl.getContext("2d");
     spectogramCtx.textBaseline = "top";
-    spectogramCtx.font = "24px serif";
+    spectogramCtx.font = "12px serif";
 
     let WIDTH = spectogramEl.width;
     let HEIGHT = spectogramEl.height;
@@ -250,7 +250,7 @@ function start_microphone(stream) {
                 }
 
                 if(v > max*0.5){
-                    spectogramCtx.fillText(`${v}`, x*0.01, y);
+                    spectogramCtx.fillText(`${v}`, x*1.01, y*0.95);
                 }
             }
 
