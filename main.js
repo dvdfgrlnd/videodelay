@@ -22,7 +22,7 @@ var source_top = 0;
 var source_width = 0;
 var source_height = 0;
 
-// var stored_frames = [];
+var stored_frames = [];
 var starttime = Date.now()
 var stream = null;
 var audioContext = null;
@@ -100,16 +100,75 @@ delay_input.addEventListener("change", (event) => {
   }, 1500);
 });
 
+let ctx2 = document.querySelector("#c2")
+ctx2.width = canvas_pixels * aspect_ratio;
+ctx2.height = canvas_pixels;
+let c2 = ctx2.getContext("2d", { willReadFrequently: true });
+c2.imageSmoothingEnabled = false;
+
+document.querySelector("#savebutton").addEventListener("click", ()=>{
+  let i = 0;
+  console.log("Before clone");
+  // let stored_frames2 = structuredClone(stored_frames);
+  let stored_frames2 = [];
+  for (let index = 0; index < stored_frames.length; index++) {
+    stored_frames2.push(stored_frames[index]);
+    
+  }
+  console.log("After clone");
+  let cs = ctx2.captureStream(30);
+  let canvasrecorder = new MediaRecorder(cs);
+  canvasdata = [];
+
+  let f2 = function(){
+    if(i == stored_frames2.length) {
+      canvasrecorder.stop();
+      return;
+    }
+    if(pause){
+      return;
+    }
+
+    c2.putImageData(stored_frames2[i], 0, 0);
+    i += 1;
+    if(Math.random() > 0.95){
+      console.log("Put data");
+    }
+    requestAnimationFrame(f2);
+  };
+
+  canvasrecorder.onstop = ()=>{
+    console.log("canvas length = ", canvasdata.length);
+    let recordedBlob = new Blob(canvasdata, { type: "video/webm" });
+    let recording = document.querySelector("#recordingvideo");
+    recording.src = URL.createObjectURL(recordedBlob);
+    let downloadButton = document.querySelector("#downloadButton");
+    downloadButton.href = recording.src;
+    downloadButton.download = "RecordedVideo.webm";
+    console.log(
+          `Successfully recorded ${recordedBlob.size} bytes of ${recordedBlob.type} media.`,
+        );
+    console.log("Download ready!");
+  };
+
+  canvasrecorder.ondataavailable = (event) => {
+    canvasdata.push(event.data);
+  };
+  canvasrecorder.start();
+
+  f2()
+});
+
 
 function f() {
   c1.drawImage(video, source_left, source_top, source_width, source_height, 0, 0, ctx.width, ctx.height);
 
-  // const frame = c1.getImageData(0, 0, ctx.width, ctx.height);
-  // stored_frames.push(frame);
-  // // if (Date.now() - starttime >= (delay_seconds * 1000)) {
-  // let oldframe = stored_frames.shift();
-  // c2.putImageData(oldframe, 0, 0);
-  // // }
+  const frame = c1.getImageData(0, 0, ctx.width, ctx.height);
+  stored_frames.push(frame);
+  if (Date.now() - starttime >= (4 * 1000)) {
+    let oldframe = stored_frames.shift();
+    // c2.putImageData(oldframe, 0, 0);
+  }
 
   if (pause) {
     return;
@@ -127,35 +186,35 @@ function init_stream(e) {
   source_top = 0;
   source_height = video_height;
 
-  let cs = ctx.captureStream(30);
-  let canvasrecorder = new MediaRecorder(cs);
-  canvasdata = [];
-  let stopcs = false;
+  // let cs = ctx.captureStream(30);
+  // let canvasrecorder = new MediaRecorder(cs);
+  // canvasdata = [];
+  // let stopcs = false;
 
-  setTimeout(()=>{
-    canvasrecorder.stop();
-    stopcs = true;
-  }, 5000);
+  // setTimeout(()=>{
+  //   canvasrecorder.stop();
+  //   stopcs = true;
+  // }, 5000);
 
-  canvasrecorder.ondataavailable = (event) => {
-    console.log("NEW DATA");
-    canvasdata.push(event.data);
+  // canvasrecorder.ondataavailable = (event) => {
+  //   console.log("NEW DATA");
+  //   canvasdata.push(event.data);
 
-    if(stopcs){
-      console.log("canvas length = ", canvasdata.length);
-      let recordedBlob = new Blob(canvasdata, { type: "video/webm" });
-      let recording = document.querySelector("#recordingvideo");
-      recording.src = URL.createObjectURL(recordedBlob);
-      let downloadButton = document.querySelector("#downloadButton");
-      downloadButton.href = recording.src;
-      downloadButton.download = "RecordedVideo.webm";
-      console.log(
-            `Successfully recorded ${recordedBlob.size} bytes of ${recordedBlob.type} media.`,
-          );
-      console.log("Download ready!");
-    }
-  };
-  canvasrecorder.start(500);
+  //   if(stopcs){
+  //     console.log("canvas length = ", canvasdata.length);
+  //     let recordedBlob = new Blob(canvasdata, { type: "video/webm" });
+  //     let recording = document.querySelector("#recordingvideo");
+  //     recording.src = URL.createObjectURL(recordedBlob);
+  //     let downloadButton = document.querySelector("#downloadButton");
+  //     downloadButton.href = recording.src;
+  //     downloadButton.download = "RecordedVideo.webm";
+  //     console.log(
+  //           `Successfully recorded ${recordedBlob.size} bytes of ${recordedBlob.type} media.`,
+  //         );
+  //     console.log("Download ready!");
+  //   }
+  // };
+  // canvasrecorder.start(500);
 
   f();
 }
