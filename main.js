@@ -30,6 +30,7 @@ var stored_frames = [];
 var starttime = Date.now()
 var stream = null;
 var audioContext = null;
+var thresholdFrequency = 14000;
 
 var pause = false;
 
@@ -74,18 +75,14 @@ frequency_input.addEventListener("change", (event) => {
     clearTimeout(deadlineTimeout2);
   }
   deadlineTimeout2 = setTimeout(() => {
-    let new_delay_seconds = parseInt(event.target.value);
-    if (delay_seconds === new_delay_seconds) {
+    let newThreshold = parseInt(event.target.value);
+    if (thresholdFrequency === newThreshold) {
       return;
     }
-    // switchVideoVisibility()
-    // delay_seconds = new_delay_seconds;
-    // console.log(`Delay = ${delay_seconds}`);
-    // stored_frames = [];
-    // starttime = Date.now();
-    // setTimeout(() => {
-    //   switchVideoVisibility()
-    // }, delay_seconds * 1000)
+    thresholdFrequency = newThreshold;
+    switchVideoVisibility();
+    stop_stream();
+    start_stream();
   }, 1500);
 });
 
@@ -94,28 +91,17 @@ const delay_input = document.querySelector("#delayseconds");
 const delay_value = document.querySelector("#delayvalue");
 delay_value.textContent = delay_input.value;
 delay_input.addEventListener("input", (event) => {
-  delay_value.textContent = event.target.value;
+  delay_value.textContent = event.target.value / 1000;
 });
 
-var delay_seconds = parseInt(delay_input.value);
+var sensitivityThreshold = parseInt(delay_input.value);
 var deadlineTimeout = null;
 delay_input.addEventListener("change", (event) => {
   if (deadlineTimeout) {
     clearTimeout(deadlineTimeout);
   }
   deadlineTimeout = setTimeout(() => {
-    // let new_delay_seconds = parseInt(event.target.value);
-    // if (delay_seconds === new_delay_seconds) {
-    //   return;
-    // }
-    // switchVideoVisibility()
-    // delay_seconds = new_delay_seconds;
-    // console.log(`Delay = ${delay_seconds}`);
-    // stored_frames = [];
-    // starttime = Date.now();
-    // setTimeout(() => {
-    //   switchVideoVisibility()
-    // }, delay_seconds * 1000)
+    sensitivityThreshold = parseInt(event.target.value);
   }, 1500);
 });
 
@@ -125,10 +111,10 @@ function f() {
 
   const frame = c1.getImageData(0, 0, ctx.width, ctx.height);
   stored_frames.push(frame);
-  if (Date.now() - starttime >= (delay_seconds * 1000)) {
-    let oldframe = stored_frames.shift();
-    c2.putImageData(oldframe, 0, 0);
-  }
+  // if (Date.now() - starttime >= (delay_seconds * 1000)) {
+  let oldframe = stored_frames.shift();
+  c2.putImageData(oldframe, 0, 0);
+  // }
 
   if (pause) {
     return;
@@ -185,9 +171,9 @@ async function start_stream() {
   video.style.display = 'none';
   starttime = Date.now();
 
-  setTimeout(() => {
-    switchVideoVisibility()
-  }, delay_seconds * 1000)
+  // setTimeout(() => {
+  switchVideoVisibility();
+  // }, 1000)
 }
 
 function startStream() {
@@ -212,7 +198,6 @@ if (window.location.hostname === "localhost" || window.location.hostname === "12
 function start_microphone(stream) {
 
   audioContext = new AudioContext();
-  let thresholdFrequency = 14000;
 
   let spectogramEl = document.getElementById("spectogram");
   let spectogramCtx = spectogramEl.getContext("2d");
@@ -240,7 +225,6 @@ function start_microphone(stream) {
 
   var buffer_length = analyser_node.frequencyBinCount;
 
-  var array_freq_domain = new Uint8Array(buffer_length);
 
   console.log("buffer_length " + buffer_length);
   console.log("sample rate = ", audioContext.sampleRate);
@@ -248,12 +232,17 @@ function start_microphone(stream) {
   console.log("freqBinSize = ", freqBinSize);
   let nonEmptySlots = buffer_length - Math.floor(thresholdFrequency / freqBinSize);
   console.log("non empty = ", nonEmptySlots);
+  let maxValue = 256*buffer_length;
 
-  delay_input.max = nonEmptySlots*256;
+  // delay_input.max = nonEmptySlots*256;
 
   var buffer = [];
   let bufferTimeThreshold = 4000;
+  let baseThreshold = 10;
   var max = 0;
+  var avgSum = 0;
+  var avgCount = 0;
+  var avgValue = 0;
 
   var draw = function () {
     if (pause) {
@@ -261,6 +250,7 @@ function start_microphone(stream) {
     }
     requestAnimationFrame(draw);
 
+    let array_freq_domain = new Uint8Array(buffer_length);
     analyser_node.getByteFrequencyData(array_freq_domain);
 
     if (microphone_stream.playbackState == microphone_stream.PLAYING_STATE) {
@@ -271,6 +261,11 @@ function start_microphone(stream) {
       if (buffer[buffer.length - 1][1] - buffer[0][1] > bufferTimeThreshold) {
         buffer.shift()
       }
+      // Update avg value
+      avgSum += s;
+      avgCount += 1;
+      avgValue = avgSum / avgCount;
+
       if (s > max * 0.7) {
         console.log("non zero", array_freq_domain.reduce((acc, v) => acc + (v > 0 ? 1 : 0)));
       }
@@ -278,7 +273,7 @@ function start_microphone(stream) {
       spectogramCtx.clearRect(0, 0, WIDTH, HEIGHT);
       spectogramCtx.fillStyle = "rgb(200, 200, 200)";
       spectogramCtx.fillRect(0, 0, WIDTH, HEIGHT);
-      spectogramCtx.lineWidth = 4;
+      spectogramCtx.lineWidth = 2;
       spectogramCtx.strokeStyle = "rgb(0, 0, 0)";
       spectogramCtx.beginPath();
 
@@ -288,6 +283,7 @@ function start_microphone(stream) {
       );
       spectogramCtx.fillStyle = "rgb(0, 0, 0)";
       spectogramCtx.fillText(`${max}`, 0, 0);
+      spectogramCtx.fillText(`${Math.round(avgValue)}`, 50, 0);
 
       let ts = buffer[0][1];
       for (let i = 1; i < buffer.length; i += 1) {
@@ -300,11 +296,21 @@ function start_microphone(stream) {
           spectogramCtx.lineTo(x, y);
         }
 
-        if (v > max * 0.5) {
+        if ((v/avgValue) > baseThreshold*(sensitivityThreshold/1000)) {
           spectogramCtx.fillText(`${v}`, x * 1.01, y * 0.95);
         }
       }
 
+      spectogramCtx.stroke();
+
+      spectogramCtx.lineWidth = 4;
+      spectogramCtx.strokeStyle = "rgb(0, 0, 255)";
+      spectogramCtx.beginPath();
+      // v/a > b*a
+      let a = (baseThreshold*(sensitivityThreshold/1000))*avgValue;
+      let y2 = (HEIGHT - (a / max) * HEIGHT);
+      spectogramCtx.moveTo(0, y2);
+      spectogramCtx.lineTo(WIDTH, y2);
       spectogramCtx.stroke();
     }
 
