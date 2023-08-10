@@ -17,6 +17,7 @@
       <p>Frequency = <output id="frequencyvalue"></output>hz</p>
       <input type="range" id="delayseconds" name="delay" min="0" max="1000" value="500">
       <p>Delay = <output id="delayvalue"></output>s</p>
+      <a id="downloadButton" class="button"> Download</a>
     </div>
     <div>
       <canvas id="spectogram" ></canvas>
@@ -45,8 +46,9 @@
       <video id="video" autoplay muted playsinline></video>
       <div>
         <canvas id="c1"></canvas>
-        <canvas id="c2"></canvas>
       </div>
+
+      <video id="recordingvideo"></video>
     </div>
   </div>
 

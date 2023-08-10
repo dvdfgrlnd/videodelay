@@ -67,6 +67,9 @@ video {
   height: 10vh;
   width: 100%;
 }
+#recordingvideo {
+  display: none;
+}
 
 
 .lds-spinner {

@@ -9,15 +9,11 @@ ctx.height = canvas_pixels;
 let c1 = ctx.getContext("2d", { willReadFrequently: true });
 c1.imageSmoothingEnabled = false;
 
-let ctx2 = document.querySelector("#c2");
-ctx2.width = canvas_pixels * aspect_ratio;
-ctx2.height = canvas_pixels;
-let c2 = ctx2.getContext("2d");
-c2.imageSmoothingEnabled = false;
-
 let video = document.querySelector("#video");
 video.muted = true;
 video.playsinline = true;
+var canvasrecorder = null;
+var canvasdata = [];
 
 var video_height = 0;
 var video_width = 0;
@@ -26,7 +22,7 @@ var source_top = 0;
 var source_width = 0;
 var source_height = 0;
 
-var stored_frames = [];
+// var stored_frames = [];
 var starttime = Date.now()
 var stream = null;
 var audioContext = null;
@@ -35,7 +31,7 @@ var thresholdFrequency = 14000;
 var pause = false;
 
 function switchVideoVisibility() {
-  var canvas = document.querySelector("#c2");
+  var canvas = document.querySelector("#c1");
   var videoloader = document.querySelector("#videoloader");
 
   let style = window.getComputedStyle(canvas);
@@ -57,7 +53,6 @@ pause_button.addEventListener("click", () => {
     pause_button.textContent = "PLAY";
     pause = true;
     stop_stream();
-    stored_frames = [];
     switchVideoVisibility();
   }
 });
@@ -109,12 +104,12 @@ delay_input.addEventListener("change", (event) => {
 function f() {
   c1.drawImage(video, source_left, source_top, source_width, source_height, 0, 0, ctx.width, ctx.height);
 
-  const frame = c1.getImageData(0, 0, ctx.width, ctx.height);
-  stored_frames.push(frame);
-  // if (Date.now() - starttime >= (delay_seconds * 1000)) {
-  let oldframe = stored_frames.shift();
-  c2.putImageData(oldframe, 0, 0);
-  // }
+  // const frame = c1.getImageData(0, 0, ctx.width, ctx.height);
+  // stored_frames.push(frame);
+  // // if (Date.now() - starttime >= (delay_seconds * 1000)) {
+  // let oldframe = stored_frames.shift();
+  // c2.putImageData(oldframe, 0, 0);
+  // // }
 
   if (pause) {
     return;
@@ -132,6 +127,36 @@ function init_stream(e) {
   source_top = 0;
   source_height = video_height;
 
+  let cs = ctx.captureStream(30);
+  let canvasrecorder = new MediaRecorder(cs);
+  canvasdata = [];
+  let stopcs = false;
+
+  setTimeout(()=>{
+    canvasrecorder.stop();
+    stopcs = true;
+  }, 5000);
+
+  canvasrecorder.ondataavailable = (event) => {
+    console.log("NEW DATA");
+    canvasdata.push(event.data);
+
+    if(stopcs){
+      console.log("canvas length = ", canvasdata.length);
+      let recordedBlob = new Blob(canvasdata, { type: "video/webm" });
+      let recording = document.querySelector("#recordingvideo");
+      recording.src = URL.createObjectURL(recordedBlob);
+      let downloadButton = document.querySelector("#downloadButton");
+      downloadButton.href = recording.src;
+      downloadButton.download = "RecordedVideo.webm";
+      console.log(
+            `Successfully recorded ${recordedBlob.size} bytes of ${recordedBlob.type} media.`,
+          );
+      console.log("Download ready!");
+    }
+  };
+  canvasrecorder.start(500);
+
   f();
 }
 
@@ -140,6 +165,9 @@ function stop_stream() {
   video.removeEventListener("loadedmetadata", init_stream);
   video.pause();
   video.currentTime = 0;
+  if (canvasrecorder && canvasrecorder.state === "recording") {
+    canvasrecorder.stop();
+  }
 
   if (audioContext) {
     audioContext.suspend();
@@ -267,7 +295,7 @@ function start_microphone(stream) {
       avgValue = avgSum / avgCount;
 
       if (s > max * 0.7) {
-        console.log("non zero", array_freq_domain.reduce((acc, v) => acc + (v > 0 ? 1 : 0)));
+        // console.log("non zero", array_freq_domain.reduce((acc, v) => acc + (v > 0 ? 1 : 0)));
       }
 
       spectogramCtx.clearRect(0, 0, WIDTH, HEIGHT);
