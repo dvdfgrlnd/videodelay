@@ -14,6 +14,9 @@ video.muted = true;
 video.playsinline = true;
 var canvasrecorder = null;
 var canvasdata = [];
+let bufferTimeThreshold = 6000;
+let saveWaitTime = 2000;
+var lastSaveTime = 0;
 
 var video_height = 0;
 var video_width = 0;
@@ -107,9 +110,12 @@ let c2 = ctx2.getContext("2d", { willReadFrequently: true });
 c2.imageSmoothingEnabled = false;
 
 document.querySelector("#savebutton").addEventListener("click", () => {
+  saveVideo();
+});
+
+function saveVideo(){
   let i = 0;
   console.log("Before clone");
-  // let stored_frames2 = structuredClone(stored_frames);
   let stored_frames2 = [];
   for (let index = 0; index < stored_frames.length; index++) {
     stored_frames2.push(stored_frames[index]);
@@ -121,16 +127,11 @@ document.querySelector("#savebutton").addEventListener("click", () => {
   canvasdata = [];
   let start_t1 = stored_frames2[0][1];
   let tdiff = (a, b) => a - b;
-
   let start_t2 = null;
 
   let f2 = function (timestamp) {
     if (start_t2 == null) {
       start_t2 = timestamp;
-    }
-    if (i == stored_frames2.length) {
-      canvasrecorder.stop();
-      return;
     }
     if (pause) {
       return;
@@ -141,11 +142,10 @@ document.querySelector("#savebutton").addEventListener("click", () => {
       let n1 = tdiff(stored_frames2[i][1], start_t1)
       let n2 = tdiff(stored_frames2[i + 1][1], start_t1)
       let n3 = tdiff(timestamp, start_t2)
-      if (Math.abs(n3 - n1) > Math.abs(n3 - n2)) {
-        i += 1;
-      } else {
+      if (Math.abs(n3 - n1) <= Math.abs(n3 - n2)) {
         break;
       }
+      i += 1;
     }
 
     c2.putImageData(stored_frames2[i][0], 0, 0);
@@ -153,7 +153,8 @@ document.querySelector("#savebutton").addEventListener("click", () => {
       console.log("Put data");
     }
     if (i >= stored_frames2.length-1) {
-      i+=1;
+      canvasrecorder.stop();
+      return;
     }
     requestAnimationFrame(f2);
   };
@@ -178,7 +179,7 @@ document.querySelector("#savebutton").addEventListener("click", () => {
   canvasrecorder.start();
 
   requestAnimationFrame(f2)
-});
+}
 
 
 function f(timestamp) {
@@ -186,9 +187,8 @@ function f(timestamp) {
 
   const frame = c1.getImageData(0, 0, ctx.width, ctx.height);
   stored_frames.push([frame, timestamp]);
-  if (Date.now() - starttime >= (4 * 1000)) {
-    let oldframe = stored_frames.shift();
-    // c2.putImageData(oldframe, 0, 0);
+  if (Date.now() - starttime >= bufferTimeThreshold) {
+    stored_frames.shift();
   }
 
   if (pause) {
@@ -206,36 +206,6 @@ function init_stream(e) {
   source_left = (video_width - source_width) / 2;
   source_top = 0;
   source_height = video_height;
-
-  // let cs = ctx.captureStream(30);
-  // let canvasrecorder = new MediaRecorder(cs);
-  // canvasdata = [];
-  // let stopcs = false;
-
-  // setTimeout(()=>{
-  //   canvasrecorder.stop();
-  //   stopcs = true;
-  // }, 5000);
-
-  // canvasrecorder.ondataavailable = (event) => {
-  //   console.log("NEW DATA");
-  //   canvasdata.push(event.data);
-
-  //   if(stopcs){
-  //     console.log("canvas length = ", canvasdata.length);
-  //     let recordedBlob = new Blob(canvasdata, { type: "video/webm" });
-  //     let recording = document.querySelector("#recordingvideo");
-  //     recording.src = URL.createObjectURL(recordedBlob);
-  //     let downloadButton = document.querySelector("#downloadButton");
-  //     downloadButton.href = recording.src;
-  //     downloadButton.download = "RecordedVideo.webm";
-  //     console.log(
-  //           `Successfully recorded ${recordedBlob.size} bytes of ${recordedBlob.type} media.`,
-  //         );
-  //     console.log("Download ready!");
-  //   }
-  // };
-  // canvasrecorder.start(500);
 
   requestAnimationFrame(f);
 }
@@ -345,7 +315,6 @@ function start_microphone(stream) {
   // delay_input.max = nonEmptySlots*256;
 
   var buffer = [];
-  let bufferTimeThreshold = 4000;
   let baseThreshold = 10;
   var max = 0;
   var avgSum = 0;
@@ -376,6 +345,15 @@ function start_microphone(stream) {
 
       if (s > max * 0.7) {
         // console.log("non zero", array_freq_domain.reduce((acc, v) => acc + (v > 0 ? 1 : 0)));
+      }
+      if ((s / avgValue) > baseThreshold * (sensitivityThreshold / 1000)) {
+        if(Date.now() - starttime >= bufferTimeThreshold && Date.now() - lastSaveTime > bufferTimeThreshold){
+          console.log("Save video");
+          lastSaveTime = Date.now();
+          setTimeout(()=>{
+            saveVideo();
+          }, saveWaitTime);
+        }
       }
 
       spectogramCtx.clearRect(0, 0, WIDTH, HEIGHT);
