@@ -12,6 +12,7 @@ c1.imageSmoothingEnabled = false;
 let video = document.querySelector("#video");
 video.muted = true;
 video.playsinline = true;
+let previewEl = document.querySelector("#preview");
 var canvasrecorder = null;
 var canvasdata = [];
 let bufferTimeThreshold = 6000;
@@ -34,7 +35,8 @@ var thresholdFrequency = 14000;
 var pause = false;
 
 function switchVideoVisibility() {
-  var canvas = document.querySelector("#c1");
+  var canvas = document.querySelector("#preview");
+  // var canvas = document.querySelector("#c1");
   var videoloader = document.querySelector("#videoloader");
 
   let style = window.getComputedStyle(canvas);
@@ -113,7 +115,7 @@ document.querySelector("#savebutton").addEventListener("click", () => {
   saveVideo();
 });
 
-function saveVideo(){
+function saveVideo() {
   let i = 0;
   console.log("Before clone");
   let stored_frames2 = [];
@@ -152,7 +154,7 @@ function saveVideo(){
     if (Math.random() > 0.95) {
       console.log("Put data");
     }
-    if (i >= stored_frames2.length-1) {
+    if (i >= stored_frames2.length - 1) {
       canvasrecorder.stop();
       return;
     }
@@ -162,10 +164,13 @@ function saveVideo(){
   canvasrecorder.onstop = () => {
     console.log("canvas length = ", canvasdata.length);
     let recordedBlob = new Blob(canvasdata, { type: "video/webm" });
-    let recording = document.querySelector("#recordingvideo");
-    recording.src = URL.createObjectURL(recordedBlob);
+    previewEl.pause();
+    previewEl.srcObject = null;
+    previewEl.src = URL.createObjectURL(recordedBlob);
+    previewEl.load();
+    previewEl.play();
     let downloadButton = document.querySelector("#downloadButton");
-    downloadButton.href = recording.src;
+    downloadButton.href = previewEl.src;
     downloadButton.download = "RecordedVideo.webm";
     console.log(
       `Successfully recorded ${recordedBlob.size} bytes of ${recordedBlob.type} media.`,
@@ -245,6 +250,9 @@ async function start_stream() {
 
   video.srcObject = stream;
   video.play()
+
+  previewEl.srcObject = stream;
+  previewEl.play()
 
   video.style.display = 'none';
   starttime = Date.now();
@@ -343,14 +351,11 @@ function start_microphone(stream) {
       avgCount += 1;
       avgValue = avgSum / avgCount;
 
-      if (s > max * 0.7) {
-        // console.log("non zero", array_freq_domain.reduce((acc, v) => acc + (v > 0 ? 1 : 0)));
-      }
       if ((s / avgValue) > baseThreshold * (sensitivityThreshold / 1000)) {
-        if(Date.now() - starttime >= bufferTimeThreshold && Date.now() - lastSaveTime > bufferTimeThreshold){
+        if (Date.now() - starttime >= bufferTimeThreshold && Date.now() - lastSaveTime > bufferTimeThreshold) {
           console.log("Save video");
           lastSaveTime = Date.now();
-          setTimeout(()=>{
+          setTimeout(() => {
             saveVideo();
           }, saveWaitTime);
         }

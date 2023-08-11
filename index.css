@@ -35,7 +35,14 @@ body {
   flex-grow: 1;
 }
 
-video {
+#video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: none;
+}
+
+#preview {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -66,9 +73,6 @@ video {
 #spectogram {
   height: 10vh;
   width: 100%;
-}
-#recordingvideo {
-  display: none;
 }
 
 
