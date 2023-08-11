@@ -106,38 +106,59 @@ ctx2.height = canvas_pixels;
 let c2 = ctx2.getContext("2d", { willReadFrequently: true });
 c2.imageSmoothingEnabled = false;
 
-document.querySelector("#savebutton").addEventListener("click", ()=>{
+document.querySelector("#savebutton").addEventListener("click", () => {
   let i = 0;
   console.log("Before clone");
   // let stored_frames2 = structuredClone(stored_frames);
   let stored_frames2 = [];
   for (let index = 0; index < stored_frames.length; index++) {
     stored_frames2.push(stored_frames[index]);
-    
+
   }
   console.log("After clone");
   let cs = ctx2.captureStream(30);
   let canvasrecorder = new MediaRecorder(cs);
   canvasdata = [];
+  let start_t1 = stored_frames2[0][1];
+  let tdiff = (a, b) => a - b;
 
-  let f2 = function(){
-    if(i == stored_frames2.length) {
+  let start_t2 = null;
+
+  let f2 = function (timestamp) {
+    if (start_t2 == null) {
+      start_t2 = timestamp;
+    }
+    if (i == stored_frames2.length) {
       canvasrecorder.stop();
       return;
     }
-    if(pause){
+    if (pause) {
       return;
     }
 
-    c2.putImageData(stored_frames2[i], 0, 0);
-    i += 1;
-    if(Math.random() > 0.95){
+    // Find closest frame. Must be a later frame than last shown frame
+    while (i < stored_frames2.length - 1) {
+      let n1 = tdiff(stored_frames2[i][1], start_t1)
+      let n2 = tdiff(stored_frames2[i + 1][1], start_t1)
+      let n3 = tdiff(timestamp, start_t2)
+      if (Math.abs(n3 - n1) > Math.abs(n3 - n2)) {
+        i += 1;
+      } else {
+        break;
+      }
+    }
+
+    c2.putImageData(stored_frames2[i][0], 0, 0);
+    if (Math.random() > 0.95) {
       console.log("Put data");
+    }
+    if (i >= stored_frames2.length-1) {
+      i+=1;
     }
     requestAnimationFrame(f2);
   };
 
-  canvasrecorder.onstop = ()=>{
+  canvasrecorder.onstop = () => {
     console.log("canvas length = ", canvasdata.length);
     let recordedBlob = new Blob(canvasdata, { type: "video/webm" });
     let recording = document.querySelector("#recordingvideo");
@@ -146,8 +167,8 @@ document.querySelector("#savebutton").addEventListener("click", ()=>{
     downloadButton.href = recording.src;
     downloadButton.download = "RecordedVideo.webm";
     console.log(
-          `Successfully recorded ${recordedBlob.size} bytes of ${recordedBlob.type} media.`,
-        );
+      `Successfully recorded ${recordedBlob.size} bytes of ${recordedBlob.type} media.`,
+    );
     console.log("Download ready!");
   };
 
@@ -156,15 +177,15 @@ document.querySelector("#savebutton").addEventListener("click", ()=>{
   };
   canvasrecorder.start();
 
-  f2()
+  requestAnimationFrame(f2)
 });
 
 
-function f() {
+function f(timestamp) {
   c1.drawImage(video, source_left, source_top, source_width, source_height, 0, 0, ctx.width, ctx.height);
 
   const frame = c1.getImageData(0, 0, ctx.width, ctx.height);
-  stored_frames.push(frame);
+  stored_frames.push([frame, timestamp]);
   if (Date.now() - starttime >= (4 * 1000)) {
     let oldframe = stored_frames.shift();
     // c2.putImageData(oldframe, 0, 0);
@@ -216,7 +237,7 @@ function init_stream(e) {
   // };
   // canvasrecorder.start(500);
 
-  f();
+  requestAnimationFrame(f);
 }
 
 function stop_stream() {
@@ -319,7 +340,7 @@ function start_microphone(stream) {
   console.log("freqBinSize = ", freqBinSize);
   let nonEmptySlots = buffer_length - Math.floor(thresholdFrequency / freqBinSize);
   console.log("non empty = ", nonEmptySlots);
-  let maxValue = 256*buffer_length;
+  let maxValue = 256 * buffer_length;
 
   // delay_input.max = nonEmptySlots*256;
 
@@ -383,7 +404,7 @@ function start_microphone(stream) {
           spectogramCtx.lineTo(x, y);
         }
 
-        if ((v/avgValue) > baseThreshold*(sensitivityThreshold/1000)) {
+        if ((v / avgValue) > baseThreshold * (sensitivityThreshold / 1000)) {
           spectogramCtx.fillText(`${v}`, x * 1.01, y * 0.95);
         }
       }
@@ -394,7 +415,7 @@ function start_microphone(stream) {
       spectogramCtx.strokeStyle = "rgb(0, 0, 255)";
       spectogramCtx.beginPath();
       // v/a > b*a
-      let a = (baseThreshold*(sensitivityThreshold/1000))*avgValue;
+      let a = (baseThreshold * (sensitivityThreshold / 1000)) * avgValue;
       let y2 = (HEIGHT - (a / max) * HEIGHT);
       spectogramCtx.moveTo(0, y2);
       spectogramCtx.lineTo(WIDTH, y2);
