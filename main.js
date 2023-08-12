@@ -1,44 +1,69 @@
-let vheight = document.querySelector("#videocontainer").clientHeight;
-let vwidth = document.querySelector("#videocontainer").clientWidth;
-let aspect_ratio = vwidth / vheight;
+// Constants
+const bufferTimeThreshold = 4000;
+const saveWaitTime = 1500;
+const peakTime = 1000;
+const canvas_pixels = 720;
 
-let canvas_pixels = 720;
-let ctx = document.querySelector("#c1")
-ctx.width = canvas_pixels * aspect_ratio;
-ctx.height = canvas_pixels;
-let c1 = ctx.getContext("2d", { willReadFrequently: true });
-c1.imageSmoothingEnabled = false;
-
-let video = document.querySelector("#video");
-video.muted = true;
-video.playsinline = true;
-let previewEl = document.querySelector("#preview");
-var canvasrecorder = null;
-var canvasdata = [];
-let bufferTimeThreshold = 4000;
-let saveWaitTime = 1500;
 var lastSaveTime = 0;
 var saveTimeout = null;
-let peakTime = 1000;
-
-var video_height = 0;
-var video_width = 0;
-var source_left = 0;
-var source_top = 0;
-var source_width = 0;
-var source_height = 0;
-
-var stored_frames = [];
-var starttime = Date.now()
+var playbackRate = 0.5
+var savedFramesBuffer = [];
 var stream = null;
 var audioContext = null;
 var thresholdFrequency = 14000;
 
-var pause = false;
+
+const frequencyInputElement = document.querySelector("#frequencyinput");
+const frequencyValueElement = document.querySelector("#frequencyvalue");
+frequencyValueElement.textContent = frequencyInputElement.value;
+frequencyInputElement.addEventListener("input", (event) => {
+  frequencyValueElement.textContent = event.target.value;
+});
+var frequencyInputEvent = null;
+frequencyInputElement.addEventListener("change", (event) => {
+  if (frequencyInputEvent) {
+    clearTimeout(frequencyInputEvent);
+  }
+  frequencyInputEvent = setTimeout(() => {
+    let newThreshold = parseInt(event.target.value);
+    if (thresholdFrequency === newThreshold) {
+      return;
+    }
+    thresholdFrequency = newThreshold;
+    switchVideoVisibility();
+    stopStream();
+    start_stream();
+  }, 1500);
+});
+
+
+const sensitivityInputElement = document.querySelector("#sensitivityinput");
+const sensitivityValueElement = document.querySelector("#sensitivityvalue");
+sensitivityValueElement.textContent = sensitivityInputElement.value;
+sensitivityInputElement.addEventListener("input", (event) => {
+  sensitivityValueElement.textContent = event.target.value / 1000;
+});
+
+var sensitivityThreshold = parseInt(sensitivityInputElement.value);
+var sensitivityInputEvent = null;
+sensitivityInputElement.addEventListener("change", (event) => {
+  if (sensitivityInputEvent) {
+    clearTimeout(sensitivityInputEvent);
+  }
+  sensitivityInputEvent = setTimeout(() => {
+    sensitivityThreshold = parseInt(event.target.value);
+  }, 1500);
+});
+
+let video = document.querySelector("#video");
+video.muted = true;
+video.playsinline = true;
+let previewVideo = document.querySelector("#preview");
+
+var pauseCamera = false;
 
 function switchVideoVisibility() {
   var canvas = document.querySelector("#preview");
-  // var canvas = document.querySelector("#c1");
   var videoloader = document.querySelector("#videoloader");
 
   let style = window.getComputedStyle(canvas);
@@ -54,179 +79,131 @@ pause_button.addEventListener("click", () => {
   if (video.paused) {
     // Start video
     pause_button.textContent = "PAUSE";
-    pause = false;
+    pauseCamera = false;
     start_stream();
   } else {
     pause_button.textContent = "PLAY";
-    pause = true;
-    stop_stream();
+    pauseCamera = true;
+    stopStream();
     switchVideoVisibility();
   }
 });
 
 
-const frequency_input = document.querySelector("#frequencyinput");
-const frequency_value = document.querySelector("#frequencyvalue");
-frequency_value.textContent = frequency_input.value;
-frequency_input.addEventListener("input", (event) => {
-  frequency_value.textContent = event.target.value;
-});
-var deadlineTimeout2 = null;
-frequency_input.addEventListener("change", (event) => {
-  if (deadlineTimeout2) {
-    clearTimeout(deadlineTimeout2);
-  }
-  deadlineTimeout2 = setTimeout(() => {
-    let newThreshold = parseInt(event.target.value);
-    if (thresholdFrequency === newThreshold) {
-      return;
-    }
-    thresholdFrequency = newThreshold;
-    switchVideoVisibility();
-    stop_stream();
-    start_stream();
-  }, 1500);
-});
-
-
-const delay_input = document.querySelector("#delayseconds");
-const delay_value = document.querySelector("#delayvalue");
-delay_value.textContent = delay_input.value;
-delay_input.addEventListener("input", (event) => {
-  delay_value.textContent = event.target.value / 1000;
-});
-
-var sensitivityThreshold = parseInt(delay_input.value);
-var deadlineTimeout = null;
-delay_input.addEventListener("change", (event) => {
-  if (deadlineTimeout) {
-    clearTimeout(deadlineTimeout);
-  }
-  deadlineTimeout = setTimeout(() => {
-    sensitivityThreshold = parseInt(event.target.value);
-  }, 1500);
-});
-
-let ctx2 = document.querySelector("#c2")
-ctx2.width = canvas_pixels * aspect_ratio;
-ctx2.height = canvas_pixels;
-let c2 = ctx2.getContext("2d", { willReadFrequently: true });
-c2.imageSmoothingEnabled = false;
+let saveVideoCanvas = document.querySelector("#saveVideoCanvas")
+saveVideoCanvas.width = canvas_pixels * aspect_ratio;
+saveVideoCanvas.height = canvas_pixels;
+let saveVideoCanvasContext = saveVideoCanvas.getContext("2d", { willReadFrequently: true });
+saveVideoCanvasContext.imageSmoothingEnabled = false;
 
 document.querySelector("#savebutton").addEventListener("click", () => {
   saveVideo();
 });
 
 function saveVideo() {
-  let i = 0;
-  console.log("Before clone");
-  let stored_frames2 = [];
-  for (let index = 0; index < stored_frames.length; index++) {
-    stored_frames2.push(stored_frames[index]);
+  // Copy frames since the array of saved frames will be updated during the playback
+  let savedFramesBufferCopy = [];
+  savedFramesBuffer.forEach((frame) => savedFramesBufferCopy.push(frame));
 
-  }
-  console.log("After clone");
-  let cs = ctx2.captureStream(30);
-  let canvasrecorder = new MediaRecorder(cs);
-  canvasdata = [];
-  let start_t1 = stored_frames2[0][1];
-  let tdiff = (a, b) => a - b;
-  var start_t2 = null;
+  let canvasRecorder = new MediaRecorder(saveVideoCanvas.captureStream(30));
+  let savedFrameStartTime = savedFramesBufferCopy[0][1];
+  var playbackStartTime = null;
 
-  let f2 = function (timestamp) {
-    if (start_t2 == null) {
-      start_t2 = timestamp;
-    }
-    if (pause) {
-      return;
+  let videoPlayback = function (timestamp) {
+    if (playbackStartTime === null) {
+      playbackStartTime = timestamp;
     }
 
     // Find closest frame. Must be a later frame than last shown frame
-    while (stored_frames2.length > 1) {
-      let n1 = tdiff(stored_frames2[0][1], start_t1)
-      let n2 = tdiff(stored_frames2[1][1], start_t1)
-      let n3 = tdiff(timestamp, start_t2)
-      if (Math.abs(n3 - n1) <= Math.abs(n3 - n2)) {
+    while (savedFramesBufferCopy.length > 1) {
+      let currentFrameTimeDiff = savedFramesBufferCopy[0][1] - savedFrameStartTime;
+      let nextFrameTimeDiff = savedFramesBufferCopy[1][1] - savedFrameStartTime;
+      let timeSinceFirstDrawnFrame = timestamp - playbackStartTime;
+      if (
+        Math.abs(timeSinceFirstDrawnFrame - currentFrameTimeDiff)
+        <= Math.abs(timeSinceFirstDrawnFrame - nextFrameTimeDiff)
+      ) {
         break;
       }
-      // Remove first frame in queue since the next frame is closer
-      stored_frames2.shift();
+      // Remove current frame the next frame is closer
+      savedFramesBufferCopy.shift();
     }
 
-    c2.putImageData(stored_frames2[0][0], 0, 0);
-    if (Math.random() > 0.95) {
-      console.log("Put data");
-    }
-    if (stored_frames2.length <= 1) {
-      canvasrecorder.stop();
+    saveVideoCanvasContext.putImageData(savedFramesBufferCopy[0][0], 0, 0);
+    if (savedFramesBufferCopy.length <= 1) {
+      // All frames have been used. Stop video playback
+      canvasRecorder.stop();
       return;
     }
-    requestAnimationFrame(f2);
+    requestAnimationFrame(videoPlayback);
   };
 
-  canvasrecorder.onstop = () => {
-    console.log("canvas length = ", canvasdata.length);
-    let recordedBlob = new Blob(canvasdata, { type: "video/webm" });
-    previewEl.pause();
-    previewEl.srcObject = null;
-    previewEl.src = URL.createObjectURL(recordedBlob);
-    previewEl.load();
-    previewEl.playbackRate = 0.5;
-    previewEl.play();
+  let videoBlobs = [];
+  canvasRecorder.ondataavailable = (event) => {
+    videoBlobs.push(event.data);
+  };
+  canvasRecorder.onstop = () => {
+    let recordedBlob = new Blob(videoBlobs, { type: "video/webm" });
+    previewVideo.pause();
+    previewVideo.srcObject = null;
+    previewVideo.src = URL.createObjectURL(recordedBlob);
+    previewVideo.load();
+    previewVideo.playbackRate = playbackRate;
+    previewVideo.play();
     let downloadButton = document.querySelector("#downloadButton");
-    downloadButton.href = previewEl.src;
+    downloadButton.href = previewVideo.src;
     downloadButton.download = "RecordedVideo.webm";
     console.log(
       `Successfully recorded ${recordedBlob.size} bytes of ${recordedBlob.type} media.`,
     );
-    console.log("Download ready!");
   };
 
-  canvasrecorder.ondataavailable = (event) => {
-    canvasdata.push(event.data);
-  };
-  canvasrecorder.start();
+  canvasRecorder.start();
 
-  requestAnimationFrame(f2)
+  requestAnimationFrame(videoPlayback)
 }
 
 
-function f(timestamp) {
-  c1.drawImage(video, source_left, source_top, source_width, source_height, 0, 0, ctx.width, ctx.height);
+function startVideoCopy(e) {
+  let vheight = document.querySelector("#videocontainer").clientHeight;
+  let vwidth = document.querySelector("#videocontainer").clientWidth;
+  let aspect_ratio = vwidth / vheight;
+  let cameraCanvas = document.querySelector("#cameraCanvas")
+  cameraCanvas.width = canvas_pixels * aspect_ratio;
+  cameraCanvas.height = canvas_pixels;
+  let cameraCanvasContext = cameraCanvas.getContext("2d", { willReadFrequently: true });
+  cameraCanvasContext.imageSmoothingEnabled = false;
 
-  const frame = c1.getImageData(0, 0, ctx.width, ctx.height);
-  stored_frames.push([frame, timestamp]);
-  if (Date.now() - starttime >= bufferTimeThreshold) {
-    stored_frames.shift();
+  let VIDEOWIDTH = this.videoWidth;
+  let VIDEOHEIGHT = this.videoHeight;
+
+  let SOURCEWIDTH = VIDEOHEIGHT * aspect_ratio;
+  let SOURCELEFT = (VIDEOWIDTH - SOURCEWIDTH) / 2;
+  let SOURCETOP = 0;
+  let SOURCEHEIGHT = VIDEOHEIGHT;
+
+  let copyVideoFrame = function (timestamp) {
+    cameraCanvasContext.drawImage(video, SOURCELEFT, SOURCETOP, SOURCEWIDTH, SOURCEHEIGHT, 0, 0, cameraCanvasContext.width, cameraCanvasContext.height);
+
+    const frame = cameraCanvasContext.getImageData(0, 0, cameraCanvasContext.width, cameraCanvasContext.height);
+    savedFramesBuffer.push([frame, timestamp]);
+    if (Date.now() - savedFramesBuffer[0][1] >= bufferTimeThreshold) {
+      savedFramesBuffer.shift();
+    }
+
+    if (pauseCamera) {
+      return;
+    }
+    requestAnimationFrame(copyVideoFrame);
   }
-
-  if (pause) {
-    return;
-  }
-  requestAnimationFrame(f);
+  requestAnimationFrame(copyVideoFrame);
 }
 
-function init_stream(e) {
-  console.log("START");
-  video_width = this.videoWidth;
-  video_height = this.videoHeight;
-
-  source_width = video_height * aspect_ratio;
-  source_left = (video_width - source_width) / 2;
-  source_top = 0;
-  source_height = video_height;
-
-  requestAnimationFrame(f);
-}
-
-function stop_stream() {
+function stopStream() {
   stream.getTracks().forEach(track => track.stop());
-  video.removeEventListener("loadedmetadata", init_stream);
+  video.removeEventListener("loadedmetadata", startVideoCopy);
   video.pause();
   video.currentTime = 0;
-  if (canvasrecorder && canvasrecorder.state === "recording") {
-    canvasrecorder.stop();
-  }
 
   if (audioContext) {
     audioContext.suspend();
@@ -242,28 +219,24 @@ async function start_stream() {
     audio: true,
     video: {
       facingMode: "user",
-      // aspectRatio: {exact: aspect_ratio},
-      min: 24,  // very important to define min value here
+      min: 24,
       ideal: 60,
       max: 120,
     }
   });
-  video.addEventListener("loadedmetadata", init_stream, false);
+  video.addEventListener("loadedmetadata", startVideoCopy, false);
 
-  start_microphone(stream);
+  initMicrophone(stream);
 
   video.srcObject = stream;
   video.play()
 
-  previewEl.srcObject = stream;
-  previewEl.play()
+  previewVideo.srcObject = stream;
+  previewVideo.play()
 
   video.style.display = 'none';
-  starttime = Date.now();
 
-  // setTimeout(() => {
   switchVideoVisibility();
-  // }, 1000)
 }
 
 function startStream() {
@@ -285,7 +258,7 @@ if (window.location.hostname === "localhost" || window.location.hostname === "12
 }
 
 
-function start_microphone(stream) {
+function initMicrophone(stream) {
 
   audioContext = new AudioContext();
 
@@ -313,13 +286,13 @@ function start_microphone(stream) {
 
   biquadFilter.connect(analyser_node);
 
-  var buffer_length = analyser_node.frequencyBinCount;
+  var bufferLength = analyser_node.frequencyBinCount;
 
-  console.log("buffer_length " + buffer_length);
+  console.log("buffer_length " + bufferLength);
   console.log("sample rate = ", audioContext.sampleRate);
-  let freqBinSize = (audioContext.sampleRate / 2) / buffer_length;
-  console.log("freqBinSize = ", freqBinSize);
-  let nonEmptySlots = buffer_length - Math.floor(thresholdFrequency / freqBinSize);
+  let frequencyBinSize = (audioContext.sampleRate / 2) / bufferLength;
+  console.log("freqBinSize = ", frequencyBinSize);
+  let nonEmptySlots = bufferLength - Math.floor(thresholdFrequency / frequencyBinSize);
   console.log("non empty = ", nonEmptySlots);
 
   var buffer = [];
@@ -327,43 +300,42 @@ function start_microphone(stream) {
   var max = 0;
   var avgSum = 0;
   var avgCount = 0;
-  var avgValue = 0;
+  var avgAudioValue = 0;
 
-  var draw = function () {
-    if (pause) {
+  var analyzeAudio = function () {
+    if (pauseCamera) {
       return;
     }
-    requestAnimationFrame(draw);
+    requestAnimationFrame(analyzeAudio);
 
-    let array_freq_domain = new Uint8Array(buffer_length);
+    let array_freq_domain = new Uint8Array(bufferLength);
     analyser_node.getByteFrequencyData(array_freq_domain);
 
     if (microphone_stream.playbackState == microphone_stream.PLAYING_STATE) {
       let s = array_freq_domain.reduce((acc, v) => v + acc);
 
-      let dn = Date.now();
-      buffer.push([s, dn]);
+      let currentTime = Date.now();
+      buffer.push([s, currentTime]);
       if (buffer[buffer.length - 1][1] - buffer[0][1] > bufferTimeThreshold) {
         buffer.shift()
       }
       // Update avg value
       avgSum += s;
       avgCount += 1;
-      avgValue = avgSum / avgCount;
+      avgAudioValue = avgSum / avgCount;
 
-      if ((s / avgValue) > baseThreshold * (sensitivityThreshold / 1000)) {
-        if (saveTimeout != null && Date.now() - saveTimeout[1] < peakTime) {
+      if ((s / avgAudioValue) > baseThreshold * (sensitivityThreshold / 1000)) {
+        if (saveTimeout != null && currentTime - saveTimeout[1] < peakTime) {
           console.log("Clear video save");
           clearTimeout(saveTimeout[0]);
-        } else if (Date.now() - starttime >= bufferTimeThreshold && Date.now() - lastSaveTime > bufferTimeThreshold) {
+        } else if (currentTime - lastSaveTime > bufferTimeThreshold) {
           console.log("Potential save");
-          lastSaveTime = Date.now();
-          console.log("saveTimeout", saveTimeout);
-          let a = setTimeout(() => {
+          lastSaveTime = currentTime;
+          let event = setTimeout(() => {
             console.log("Save video");
             saveVideo();
           }, saveWaitTime);
-          saveTimeout = [a, Date.now()];
+          saveTimeout = [event, lastSaveTime];
         }
       }
 
@@ -380,11 +352,11 @@ function start_microphone(stream) {
       );
       spectogramCtx.fillStyle = "rgb(0, 0, 0)";
       spectogramCtx.fillText(`${max}`, 0, 0);
-      spectogramCtx.fillText(`${Math.round(avgValue)}`, 50, 0);
+      spectogramCtx.fillText(`${Math.round(avgAudioValue)}`, 50, 0);
 
-      let ts = buffer[0][1];
+      let firstTimestamp = buffer[0][1];
       for (let i = 1; i < buffer.length; i += 1) {
-        let x = ((buffer[i][1] - ts) / bufferTimeThreshold) * WIDTH;
+        let x = ((buffer[i][1] - firstTimestamp) / bufferTimeThreshold) * WIDTH;
         let v = buffer[i][0];
         let y = HEIGHT - (v / max) * HEIGHT;
         if (i === 1) {
@@ -393,7 +365,7 @@ function start_microphone(stream) {
           spectogramCtx.lineTo(x, y);
         }
 
-        if ((v / avgValue) > baseThreshold * (sensitivityThreshold / 1000)) {
+        if ((v / avgAudioValue) > baseThreshold * (sensitivityThreshold / 1000)) {
           spectogramCtx.fillText(`${v}`, x * 1.01, y * 0.95);
         }
       }
@@ -404,15 +376,15 @@ function start_microphone(stream) {
       spectogramCtx.strokeStyle = "rgb(0, 0, 255)";
       spectogramCtx.beginPath();
       // v/a > b*a
-      let a = (baseThreshold * (sensitivityThreshold / 1000)) * avgValue;
-      let y2 = (HEIGHT - (a / max) * HEIGHT);
-      spectogramCtx.moveTo(0, y2);
-      spectogramCtx.lineTo(WIDTH, y2);
+      let triggerThreshold = (baseThreshold * (sensitivityThreshold / 1000)) * avgAudioValue;
+      let yTriggerThreshold = (HEIGHT - (triggerThreshold / max) * HEIGHT);
+      spectogramCtx.moveTo(0, yTriggerThreshold);
+      spectogramCtx.lineTo(WIDTH, yTriggerThreshold);
       spectogramCtx.stroke();
     }
 
   }
-  draw();
+  analyzeAudio();
 }
 
 

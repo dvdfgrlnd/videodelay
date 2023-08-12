@@ -15,8 +15,8 @@
       <button id="toggleswitch" type="button">PAUSE</button>
       <input type="range" id="frequencyinput" name="frequency" min="0" max="24000" value="14000">
       <p>Frequency = <output id="frequencyvalue"></output>hz</p>
-      <input type="range" id="delayseconds" name="delay" min="0" max="1000" value="500">
-      <p>Delay = <output id="delayvalue"></output>s</p>
+      <input type="range" id="sensitivityinput" name="delay" min="0" max="1000" value="500">
+      <p>Delay = <output id="sensitivityvalue"></output>s</p>
       <button id="savebutton" type="button">SAVE</button>
       <a id="downloadButton" class="button"> Download</a>
     </div>
@@ -47,8 +47,8 @@
       <video id="video" autoplay muted playsinline></video>
       <video id="preview" autoplay muted playsinline loop></video>
       <div>
-        <canvas id="c1"></canvas>
-        <canvas id="c2"></canvas>
+        <canvas id="cameraCanvas"></canvas>
+        <canvas id="saveVideoCanvas"></canvas>
       </div>
     </div>
   </div>

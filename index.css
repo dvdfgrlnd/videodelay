@@ -22,11 +22,11 @@ body {
   font-family: Tahoma, sans-serif;
 }
 
-#delayvalue {
+#sensitivityvalue {
   flex-grow: 0;
 }
 
-#delayseconds {
+#sensitivityinput {
   flex-grow: 1;
 }
 
@@ -49,8 +49,8 @@ body {
   display: none;
 }
 
-#c1,
-#c2 {
+#cameraCanvas,
+#saveVideoCanvas {
   display: none;
   width: 100%;
   height: 100%;
