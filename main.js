@@ -129,7 +129,7 @@ function saveVideo() {
   canvasdata = [];
   let start_t1 = stored_frames2[0][1];
   let tdiff = (a, b) => a - b;
-  let start_t2 = null;
+  var start_t2 = null;
 
   let f2 = function (timestamp) {
     if (start_t2 == null) {
@@ -140,21 +140,22 @@ function saveVideo() {
     }
 
     // Find closest frame. Must be a later frame than last shown frame
-    while (i < stored_frames2.length - 1) {
-      let n1 = tdiff(stored_frames2[i][1], start_t1)
-      let n2 = tdiff(stored_frames2[i + 1][1], start_t1)
+    while (stored_frames2.length > 1) {
+      let n1 = tdiff(stored_frames2[0][1], start_t1)
+      let n2 = tdiff(stored_frames2[1][1], start_t1)
       let n3 = tdiff(timestamp, start_t2)
       if (Math.abs(n3 - n1) <= Math.abs(n3 - n2)) {
         break;
       }
-      i += 1;
+      // Remove first frame in queue since the next frame is closer
+      stored_frames2.shift();
     }
 
-    c2.putImageData(stored_frames2[i][0], 0, 0);
+    c2.putImageData(stored_frames2[0][0], 0, 0);
     if (Math.random() > 0.95) {
       console.log("Put data");
     }
-    if (i >= stored_frames2.length - 1) {
+    if (stored_frames2.length <= 1) {
       canvasrecorder.stop();
       return;
     }
@@ -311,16 +312,12 @@ function start_microphone(stream) {
 
   var buffer_length = analyser_node.frequencyBinCount;
 
-
   console.log("buffer_length " + buffer_length);
   console.log("sample rate = ", audioContext.sampleRate);
   let freqBinSize = (audioContext.sampleRate / 2) / buffer_length;
   console.log("freqBinSize = ", freqBinSize);
   let nonEmptySlots = buffer_length - Math.floor(thresholdFrequency / freqBinSize);
   console.log("non empty = ", nonEmptySlots);
-  let maxValue = 256 * buffer_length;
-
-  // delay_input.max = nonEmptySlots*256;
 
   var buffer = [];
   let baseThreshold = 10;
