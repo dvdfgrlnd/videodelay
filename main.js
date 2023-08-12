@@ -15,9 +15,11 @@ video.playsinline = true;
 let previewEl = document.querySelector("#preview");
 var canvasrecorder = null;
 var canvasdata = [];
-let bufferTimeThreshold = 6000;
-let saveWaitTime = 2000;
+let bufferTimeThreshold = 4000;
+let saveWaitTime = 1500;
 var lastSaveTime = 0;
+var saveTimeout = null;
+let peakTime = 1000;
 
 var video_height = 0;
 var video_width = 0;
@@ -169,6 +171,7 @@ function saveVideo() {
     previewEl.srcObject = null;
     previewEl.src = URL.createObjectURL(recordedBlob);
     previewEl.load();
+    previewEl.playbackRate = 0.5;
     previewEl.play();
     let downloadButton = document.querySelector("#downloadButton");
     downloadButton.href = previewEl.src;
@@ -349,12 +352,18 @@ function start_microphone(stream) {
       avgValue = avgSum / avgCount;
 
       if ((s / avgValue) > baseThreshold * (sensitivityThreshold / 1000)) {
-        if (Date.now() - starttime >= bufferTimeThreshold && Date.now() - lastSaveTime > bufferTimeThreshold) {
-          console.log("Save video");
+        if (saveTimeout != null && Date.now() - saveTimeout[1] < peakTime) {
+          console.log("Clear video save");
+          clearTimeout(saveTimeout[0]);
+        } else if (Date.now() - starttime >= bufferTimeThreshold && Date.now() - lastSaveTime > bufferTimeThreshold) {
+          console.log("Potential save");
           lastSaveTime = Date.now();
-          setTimeout(() => {
+          console.log("saveTimeout", saveTimeout);
+          let a = setTimeout(() => {
+            console.log("Save video");
             saveVideo();
           }, saveWaitTime);
+          saveTimeout = [a, Date.now()];
         }
       }
 
