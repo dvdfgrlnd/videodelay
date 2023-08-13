@@ -2,7 +2,7 @@
 const bufferTimeThreshold = 4000;
 const saveWaitTime = 1500;
 const peakTime = 1000;
-const canvas_pixels = 720;
+const canvasPixels = 720;
 
 var lastSaveTime = 0;
 var saveTimeout = null;
@@ -90,19 +90,21 @@ pause_button.addEventListener("click", () => {
 });
 
 
-let saveVideoCanvas = document.querySelector("#saveVideoCanvas")
-saveVideoCanvas.width = canvas_pixels * aspect_ratio;
-saveVideoCanvas.height = canvas_pixels;
-let saveVideoCanvasContext = saveVideoCanvas.getContext("2d", { willReadFrequently: true });
-saveVideoCanvasContext.imageSmoothingEnabled = false;
 
 document.querySelector("#savebutton").addEventListener("click", () => {
   saveVideo();
 });
 
 function saveVideo() {
+  let saveVideoCanvas = document.querySelector("#saveVideoCanvas")
+  saveVideoCanvas.width = canvasPixels * getAspectRatio();
+  saveVideoCanvas.height = canvasPixels;
+  let saveVideoCanvasContext = saveVideoCanvas.getContext("2d", { willReadFrequently: true });
+  saveVideoCanvasContext.imageSmoothingEnabled = false;
+
   // Copy frames since the array of saved frames will be updated during the playback
   let savedFramesBufferCopy = [];
+  console.log("len", savedFramesBuffer.length);
   savedFramesBuffer.forEach((frame) => savedFramesBufferCopy.push(frame));
 
   let canvasRecorder = new MediaRecorder(saveVideoCanvas.captureStream(30));
@@ -164,13 +166,18 @@ function saveVideo() {
 }
 
 
-function startVideoCopy(e) {
+function getAspectRatio(){
   let vheight = document.querySelector("#videocontainer").clientHeight;
   let vwidth = document.querySelector("#videocontainer").clientWidth;
   let aspect_ratio = vwidth / vheight;
+  return aspect_ratio;
+}
+
+function startVideoCopy(e) {
   let cameraCanvas = document.querySelector("#cameraCanvas")
-  cameraCanvas.width = canvas_pixels * aspect_ratio;
-  cameraCanvas.height = canvas_pixels;
+  let aspect_ratio = getAspectRatio();
+  cameraCanvas.width = canvasPixels * aspect_ratio;
+  cameraCanvas.height = canvasPixels;
   let cameraCanvasContext = cameraCanvas.getContext("2d", { willReadFrequently: true });
   cameraCanvasContext.imageSmoothingEnabled = false;
 
@@ -183,11 +190,12 @@ function startVideoCopy(e) {
   let SOURCEHEIGHT = VIDEOHEIGHT;
 
   let copyVideoFrame = function (timestamp) {
-    cameraCanvasContext.drawImage(video, SOURCELEFT, SOURCETOP, SOURCEWIDTH, SOURCEHEIGHT, 0, 0, cameraCanvasContext.width, cameraCanvasContext.height);
+    cameraCanvasContext.drawImage(video, SOURCELEFT, SOURCETOP, SOURCEWIDTH, SOURCEHEIGHT, 0, 0, cameraCanvas.width, cameraCanvas.height);
 
-    const frame = cameraCanvasContext.getImageData(0, 0, cameraCanvasContext.width, cameraCanvasContext.height);
-    savedFramesBuffer.push([frame, timestamp]);
-    if (Date.now() - savedFramesBuffer[0][1] >= bufferTimeThreshold) {
+    const frame = cameraCanvasContext.getImageData(0, 0, cameraCanvas.width, cameraCanvas.height);
+    let now = Date.now();
+    savedFramesBuffer.push([frame, timestamp, now]);
+    if (now - savedFramesBuffer[0][2] >= bufferTimeThreshold) {
       savedFramesBuffer.shift();
     }
 
