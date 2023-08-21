@@ -3,6 +3,7 @@ const bufferTimeThreshold = 4000;
 const saveWaitTime = 1500;
 const peakTime = 1000;
 const canvasPixels = 720;
+// const canvasPixels = 120;
 
 var lastSaveTime = 0;
 var saveTimeout = null;
@@ -166,7 +167,7 @@ function saveVideo() {
 }
 
 
-function getAspectRatio(){
+function getAspectRatio() {
   let vheight = document.querySelector("#videocontainer").clientHeight;
   let vwidth = document.querySelector("#videocontainer").clientWidth;
   let aspect_ratio = vwidth / vheight;
@@ -181,6 +182,15 @@ function startVideoCopy(e) {
   let cameraCanvasContext = cameraCanvas.getContext("2d", { willReadFrequently: true });
   cameraCanvasContext.imageSmoothingEnabled = false;
 
+  let saveVideoCanvas = document.querySelector("#saveVideoCanvas")
+  saveVideoCanvas.style.display = "block";
+  saveVideoCanvas.width = canvasPixels * getAspectRatio();
+  saveVideoCanvas.height = canvasPixels;
+  let saveVideoCanvasContext = saveVideoCanvas.getContext("2d", { willReadFrequently: true });
+  saveVideoCanvasContext.imageSmoothingEnabled = false;
+  saveVideoCanvasContext.textBaseline = "top";
+  saveVideoCanvasContext.font = "22px serif";
+
   let VIDEOWIDTH = this.videoWidth;
   let VIDEOHEIGHT = this.videoHeight;
 
@@ -188,6 +198,10 @@ function startVideoCopy(e) {
   let SOURCELEFT = (VIDEOWIDTH - SOURCEWIDTH) / 2;
   let SOURCETOP = 0;
   let SOURCEHEIGHT = VIDEOHEIGHT;
+  let rollAvg = [];
+  let WIDTH = spectogramEl.width;
+  let HEIGHT = spectogramEl.height;
+  var max = 0;
 
   let copyVideoFrame = function (timestamp) {
     cameraCanvasContext.drawImage(video, SOURCELEFT, SOURCETOP, SOURCEWIDTH, SOURCEHEIGHT, 0, 0, cameraCanvas.width, cameraCanvas.height);
@@ -198,6 +212,60 @@ function startVideoCopy(e) {
     if (now - savedFramesBuffer[0][2] >= bufferTimeThreshold) {
       savedFramesBuffer.shift();
     }
+
+    const diffImageData = saveVideoCanvasContext.createImageData(frame);
+    let dind = Math.max(savedFramesBuffer.length-2, 0);
+    let pdata = savedFramesBuffer[dind][0].data;
+    let data = frame.data;
+    let diffdata = diffImageData.data;
+    var whitePixels = 0;
+    for (let index = 0; index < frame.data.length; index += 4) {
+      let grey = (data[index] + data[index + 1] + data[index + 2]) / 3;
+      let grey2 = (pdata[index] + pdata[index + 1] + pdata[index + 2]) / 3;
+      let pred = Math.abs(grey-grey2) > 100;
+      grey = pred? 255: 0;
+
+      whitePixels += pred?1: 0;
+      // let d = Math.abs(data[index]-data[index+1]) + Math.abs(data[index]-data[index+2]);
+      // let grey = (d < 20) ? 255:0;
+      diffdata[index + 0] = grey;
+      diffdata[index + 1] = grey;
+      diffdata[index + 2] = grey;
+      diffdata[index + 3] = data[index + 3];
+
+    }
+    whitePixels = whitePixels > (diffdata.length/4)*0.2? 0 : whitePixels;
+    rollAvg.push([whitePixels, now]);
+    if (rollAvg[rollAvg.length - 1][1] - rollAvg[0][1] > bufferTimeThreshold) {
+      rollAvg.shift()
+    }
+    // let avgWhite = rollAvg.reduce((acc, v) => acc+v, 0) / rollAvg.length;
+    saveVideoCanvasContext.putImageData(diffImageData, 0, 0);
+    // saveVideoCanvasContext.fillStyle = "rgb(255, 0, 0)";
+    // saveVideoCanvasContext.fillText(`${avgWhite}`, 50, 50);
+    let nm = rollAvg.reduce((acc, v) => Math.max(acc, v[0]), 0);
+    nm = nm > (diffdata.length/4)*0.2? 0 : nm;
+    max = Math.max(
+      nm,
+      max
+    );
+
+    spectogramCtx.clearRect(0, 0, WIDTH, HEIGHT);
+    spectogramCtx.lineWidth = 2;
+    spectogramCtx.strokeStyle = "rgb(0, 255, 0)";
+    spectogramCtx.beginPath();
+    let firstTimestamp = rollAvg[0][1];
+    for (let i = 1; i < rollAvg.length; i += 1) {
+      let x = ((rollAvg[i][1] - firstTimestamp) / bufferTimeThreshold) * WIDTH;
+      let v = rollAvg[i][0];
+      let y = HEIGHT - (v / max) * HEIGHT;
+      if (i === 1) {
+        spectogramCtx.moveTo(x, y);
+      } else {
+        spectogramCtx.lineTo(x, y);
+      }
+    }
+    spectogramCtx.stroke();
 
     if (pauseCamera) {
       return;
@@ -234,13 +302,26 @@ async function start_stream() {
   });
   video.addEventListener("loadedmetadata", startVideoCopy, false);
 
-  initMicrophone(stream);
 
-  video.srcObject = stream;
-  video.play()
+  // video.srcObject = stream;
+  imageFile = "IMG_0237_SHORT.MOV"
+  video.src = imageFile;
+  video.loop = true;
+  video.muted = false;
+  video.play();
 
-  previewVideo.srcObject = stream;
+  // previewVideo.srcObject = stream;
+  previewVideo.src = imageFile;
   previewVideo.play()
+
+  stream = video.captureStream ?video.captureStream():video.mozCaptureStream();
+  let ctx = new AudioContext();
+  var source = ctx.createMediaElementSource(video);
+  var stream_dest = ctx.createMediaStreamDestination();
+  source.connect(stream_dest);
+
+  // stream = stream_dest.stream;
+  // initMicrophone(stream_dest.stream);
 
   video.style.display = 'none';
 
@@ -253,7 +334,7 @@ function startStream() {
   d.style.display = 'none';
   start_stream()
     .then((r) => console.log(r))
-    .catch((err) => console.error(err));
+    // .catch((err) => console.error(err));
 }
 
 document.querySelector("#startmessage").addEventListener("click", async () => {
@@ -265,13 +346,13 @@ if (window.location.hostname === "localhost" || window.location.hostname === "12
   startStream();
 }
 
+let spectogramEl = document.getElementById("spectogram");
+let spectogramCtx = spectogramEl.getContext("2d");
 
 function initMicrophone(stream) {
 
   audioContext = new AudioContext();
 
-  let spectogramEl = document.getElementById("spectogram");
-  let spectogramCtx = spectogramEl.getContext("2d");
   spectogramCtx.textBaseline = "top";
   spectogramCtx.font = "12px serif";
 
@@ -341,7 +422,7 @@ function initMicrophone(stream) {
           lastSaveTime = currentTime;
           let event = setTimeout(() => {
             console.log("Save video");
-            saveVideo();
+            // saveVideo();
           }, saveWaitTime);
           saveTimeout = [event, lastSaveTime];
         }
