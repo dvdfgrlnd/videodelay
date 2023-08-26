@@ -202,6 +202,7 @@ function startVideoCopy(e) {
   let WIDTH = spectogramEl.width;
   let HEIGHT = spectogramEl.height;
   var max = 0;
+  var paths = [];
 
   let copyVideoFrame = function (timestamp) {
     cameraCanvasContext.drawImage(video, SOURCELEFT, SOURCETOP, SOURCEWIDTH, SOURCEHEIGHT, 0, 0, cameraCanvas.width, cameraCanvas.height);
@@ -214,15 +215,18 @@ function startVideoCopy(e) {
     }
 
     const diffImageData = saveVideoCanvasContext.createImageData(frame);
-    let dind = Math.max(savedFramesBuffer.length-2, 0);
+    let dind = Math.max(savedFramesBuffer.length-8, 0);
     let pdata = savedFramesBuffer[dind][0].data;
     let data = frame.data;
     let diffdata = diffImageData.data;
     var whitePixels = 0;
+    var avx = 0;
+    var avy = 0;
+    var countP = 0;
     for (let index = 0; index < frame.data.length; index += 4) {
       let grey = (data[index] + data[index + 1] + data[index + 2]) / 3;
       let grey2 = (pdata[index] + pdata[index + 1] + pdata[index + 2]) / 3;
-      let pred = Math.abs(grey-grey2) > 100;
+      let pred = Math.abs(grey-grey2) > 80;
       grey = pred? 255: 0;
 
       whitePixels += pred?1: 0;
@@ -233,12 +237,25 @@ function startVideoCopy(e) {
       diffdata[index + 2] = grey;
       diffdata[index + 3] = data[index + 3];
 
+      if(pred){
+        avx += (index/4) % diffImageData.width;
+        avy += Math.floor((index/4) / diffImageData.width);
+        countP += 1;
+      }
+
     }
+    avx = avx /countP;
+    avy = avy /countP;
+
     whitePixels = whitePixels > (diffdata.length/4)*0.2? 0 : whitePixels;
     rollAvg.push([whitePixels, now]);
+    paths.push([avx, avy]);
     if (rollAvg[rollAvg.length - 1][1] - rollAvg[0][1] > bufferTimeThreshold) {
       rollAvg.shift()
+      paths.shift()
     }
+    saveVideoCanvasContext.clearRect(0, 0, saveVideoCanvas.width, saveVideoCanvas.height);
+
     // let avgWhite = rollAvg.reduce((acc, v) => acc+v, 0) / rollAvg.length;
     saveVideoCanvasContext.putImageData(diffImageData, 0, 0);
     // saveVideoCanvasContext.fillStyle = "rgb(255, 0, 0)";
@@ -249,6 +266,26 @@ function startVideoCopy(e) {
       nm,
       max
     );
+
+    saveVideoCanvasContext.fillStyle = "red";
+    saveVideoCanvasContext.lineWidth = 2;
+    saveVideoCanvasContext.strokeStyle = "rgb(255, 0, 0)";
+    saveVideoCanvasContext.beginPath()
+    let n = 10;
+    for(let i=0; i< paths.length; i+=1){
+      let x = paths[i][0];
+      let y = paths[i][1];
+      if (i === 0) {
+        saveVideoCanvasContext.moveTo(x, y);
+      } else {
+        saveVideoCanvasContext.lineTo(x, y);
+      }
+    }
+    saveVideoCanvasContext.stroke()
+
+    // saveVideoCanvasContext.arc(avx, avy, 10, 0, 2 * Math.PI);
+    // saveVideoCanvasContext.fill()
+
 
     spectogramCtx.clearRect(0, 0, WIDTH, HEIGHT);
     spectogramCtx.lineWidth = 2;
@@ -291,15 +328,15 @@ function stopStream() {
 }
 
 async function start_stream() {
-  stream = await navigator.mediaDevices.getUserMedia({
-    audio: true,
-    video: {
-      facingMode: "user",
-      min: 24,
-      ideal: 60,
-      max: 120,
-    }
-  });
+  // stream = await navigator.mediaDevices.getUserMedia({
+  //   audio: true,
+  //   video: {
+  //     facingMode: "user",
+  //     min: 24,
+  //     ideal: 60,
+  //     max: 120,
+  //   }
+  // });
   video.addEventListener("loadedmetadata", startVideoCopy, false);
 
 
@@ -308,6 +345,7 @@ async function start_stream() {
   video.src = imageFile;
   video.loop = true;
   video.muted = false;
+  video.playbackRate = 1.0 // 0.5
   video.play();
 
   // previewVideo.srcObject = stream;
@@ -343,7 +381,7 @@ document.querySelector("#startmessage").addEventListener("click", async () => {
 
 if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
   console.log("Auto start due to localhost");
-  startStream();
+  // startStream();
 }
 
 let spectogramEl = document.getElementById("spectogram");
