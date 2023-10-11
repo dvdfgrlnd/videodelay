@@ -204,37 +204,112 @@ function startVideoCopy(e) {
   var max = 0;
   var paths = [];
 
+  function ballDetection(data, index,){
+      let pred = data[index+1] > data[index] && data[index+1] > data[index+2];
+      let grey = pred? 255: 0;
+      let r = 0, g = 0, b = 0;
+      if(pred){
+        r = 0;
+        g = 255;
+        b = 0;
+      }
+
+      pred = data[index] > 200 && data[index+1] > 200 && data[index+2] > 200;
+      grey = pred? 125: grey;
+
+      if(pred){
+        r = 255;
+        g = 255;
+        b = 255;
+      }
+      return [r, g, b, pred]
+  }
+
+  function strokeDetection(){
+    // Heuristic:
+    // 1. Extended time of low diffs
+    // 2. Increase in diffs
+    // 3. Average diff locaction goes left
+    // 4. Average diff location goes right
+
+    // Can this be modeled with a FSM (state machine)?
+  }
+
+  function canvas_arrow(context, fromx, fromy, tox, toy) {
+    context.strokeStyle = "rgb(255, 0, 0)";
+    context.beginPath();
+    var headlen = 10; // length of head in pixels
+    var dx = tox - fromx;
+    var dy = toy - fromy;
+    var angle = Math.atan2(dy, dx);
+    context.moveTo(fromx, fromy);
+    context.lineTo(tox, toy);
+    context.lineTo(tox - headlen * Math.cos(angle - Math.PI / 6), toy - headlen * Math.sin(angle - Math.PI / 6));
+    context.moveTo(tox, toy);
+    context.lineTo(tox - headlen * Math.cos(angle + Math.PI / 6), toy - headlen * Math.sin(angle + Math.PI / 6));
+    context.stroke();
+  }
+
   let copyVideoFrame = function (timestamp) {
     cameraCanvasContext.drawImage(video, SOURCELEFT, SOURCETOP, SOURCEWIDTH, SOURCEHEIGHT, 0, 0, cameraCanvas.width, cameraCanvas.height);
 
     const frame = cameraCanvasContext.getImageData(0, 0, cameraCanvas.width, cameraCanvas.height);
     let now = Date.now();
-    savedFramesBuffer.push([frame, timestamp, now]);
+
+    if(savedFramesBuffer.length > 2 && savedFramesBuffer[savedFramesBuffer.length-1][3] < savedFramesBuffer[savedFramesBuffer.length-2][3]){
+      console.log("Reset");
+      savedFramesBuffer = [];
+      paths = [];
+      max = 0;
+    }
+
+    savedFramesBuffer.push([frame, timestamp, now, video.currentTime]);
     if (now - savedFramesBuffer[0][2] >= bufferTimeThreshold) {
       savedFramesBuffer.shift();
     }
 
     const diffImageData = saveVideoCanvasContext.createImageData(frame);
-    let dind = Math.max(savedFramesBuffer.length-8, 0);
-    let pdata = savedFramesBuffer[dind][0].data;
-    let data = frame.data;
+    const frameGap = 4;
+    let dind = Math.max(savedFramesBuffer.length-frameGap, 0);
+    let l = savedFramesBuffer.length;
+    if(l < 3){
+      requestAnimationFrame(copyVideoFrame);
+      return;
+    }
+    let pdata = savedFramesBuffer[l-3][0].data;
+    let data = savedFramesBuffer[l-2][0].data;
+    let ndata = savedFramesBuffer[l-1][0].data;
+
     let diffdata = diffImageData.data;
     var whitePixels = 0;
     var avx = 0;
     var avy = 0;
     var countP = 0;
     for (let index = 0; index < frame.data.length; index += 4) {
-      let grey = (data[index] + data[index + 1] + data[index + 2]) / 3;
-      let grey2 = (pdata[index] + pdata[index + 1] + pdata[index + 2]) / 3;
-      let pred = Math.abs(grey-grey2) > 80;
-      grey = pred? 255: 0;
+      let grey1 = (pdata[index] + pdata[index + 1] + pdata[index + 2]) / 3;
+      let grey2 = (data[index] + data[index + 1] + data[index + 2]) / 3;
+      let grey3 = (ndata[index] + ndata[index + 1] + ndata[index + 2]) / 3;
+      // let grey2 = (pdata[index] + pdata[index + 1] + pdata[index + 2]) / 3;
+      let [r, g, b, pred] = ballDetection(data, index);
+      pred = Math.abs(grey2-grey1) > 80;
+      // pred = Math.abs(grey2-grey1) > 80 && Math.abs(grey2 - grey3) > 80;
+      // grey = pred? 255: 0;
+      if(pred) {
+        r = 255;
+        g = 255;
+        b = 255;
+      }else{
+        r = 0;
+        g = 0;
+        b = 0;
+      }
 
-      whitePixels += pred?1: 0;
+      // whitePixels += pred?1: 0;
       // let d = Math.abs(data[index]-data[index+1]) + Math.abs(data[index]-data[index+2]);
       // let grey = (d < 20) ? 255:0;
-      diffdata[index + 0] = grey;
-      diffdata[index + 1] = grey;
-      diffdata[index + 2] = grey;
+      diffdata[index + 0] = r;
+      diffdata[index + 1] = g;
+      diffdata[index + 2] = b;
       diffdata[index + 3] = data[index + 3];
 
       if(pred){
@@ -247,24 +322,45 @@ function startVideoCopy(e) {
     avx = avx /countP;
     avy = avy /countP;
 
-    whitePixels = whitePixels > (diffdata.length/4)*0.2? 0 : whitePixels;
+    // whitePixels = whitePixels > (diffdata.length/4)*0.2? 0 : whitePixels;
+    whitePixels = countP / (frame.data.length / 4);
     rollAvg.push([whitePixels, now]);
-    paths.push([avx, avy]);
     if (rollAvg[rollAvg.length - 1][1] - rollAvg[0][1] > bufferTimeThreshold) {
-      rollAvg.shift()
-      paths.shift()
+      rollAvg.shift();
     }
+    let aa = whitePixels>0.001;
+    // if(whitePixels>0.001){
+    paths.push([avx, avy, now, aa]);
+    if (paths[paths.length - 1][2] - paths[0][2] > bufferTimeThreshold) {
+      paths.shift();
+    }
+    // }
     saveVideoCanvasContext.clearRect(0, 0, saveVideoCanvas.width, saveVideoCanvas.height);
+
+    // if(Math.random() > 0.90) {
+    //   console.log(whitePixels);
+    // }
 
     // let avgWhite = rollAvg.reduce((acc, v) => acc+v, 0) / rollAvg.length;
     saveVideoCanvasContext.putImageData(diffImageData, 0, 0);
+
+    let refr = 50;
+    // var k = paths.length - 1;
+    // while(k >= 0 && now - paths[k][2] < refr) {
+    //   k-= 1;
+    // }
+    // k = Math.max(k, 0);
+    // let [ox, oy, _] = paths[k];
+    // canvas_arrow(saveVideoCanvasContext, ox, oy, avx, avy);
+
+
     // saveVideoCanvasContext.fillStyle = "rgb(255, 0, 0)";
     // saveVideoCanvasContext.fillText(`${avgWhite}`, 50, 50);
     let nm = rollAvg.reduce((acc, v) => Math.max(acc, v[0]), 0);
-    nm = nm > (diffdata.length/4)*0.2? 0 : nm;
+    // nm = nm > (diffdata.length/4)*0.2? 0 : nm;
     max = Math.max(
       nm,
-      max
+      nm
     );
 
     saveVideoCanvasContext.fillStyle = "red";
@@ -272,10 +368,15 @@ function startVideoCopy(e) {
     saveVideoCanvasContext.strokeStyle = "rgb(255, 0, 0)";
     saveVideoCanvasContext.beginPath()
     let n = 10;
-    for(let i=0; i< paths.length; i+=1){
+    var pi = 0;
+    for(let i=0; i< paths.length; i+=1) {
+      if(paths[i][2]-paths[pi][2] < refr) {
+        continue;
+      }
+      pi = i;
       let x = paths[i][0];
       let y = paths[i][1];
-      if (i === 0) {
+      if (i === 0 || !paths[i][3]) {
         saveVideoCanvasContext.moveTo(x, y);
       } else {
         saveVideoCanvasContext.lineTo(x, y);
@@ -283,8 +384,13 @@ function startVideoCopy(e) {
     }
     saveVideoCanvasContext.stroke()
 
-    // saveVideoCanvasContext.arc(avx, avy, 10, 0, 2 * Math.PI);
-    // saveVideoCanvasContext.fill()
+    if(paths.length>0){
+      let last = paths[paths.length-1]
+      saveVideoCanvasContext.beginPath()
+      saveVideoCanvasContext.arc(last[0], last[1], 6, 0, 2 * Math.PI);
+      saveVideoCanvasContext.fill()
+      saveVideoCanvasContext.stroke()
+    }
 
 
     spectogramCtx.clearRect(0, 0, WIDTH, HEIGHT);
@@ -303,6 +409,17 @@ function startVideoCopy(e) {
       }
     }
     spectogramCtx.stroke();
+
+    spectogramCtx.lineWidth = 4;
+    spectogramCtx.strokeStyle = "rgb(0, 0, 255)";
+    spectogramCtx.beginPath();
+    // v/a > b*a
+    let avgV = rollAvg.reduce((p, c)=> p+c[0], 0)/rollAvg.length;
+    let yTriggerThreshold = (HEIGHT - (avgV / max) * HEIGHT);
+    spectogramCtx.moveTo(0, yTriggerThreshold);
+    spectogramCtx.lineTo(WIDTH, yTriggerThreshold);
+    spectogramCtx.stroke();
+
 
     if (pauseCamera) {
       return;
@@ -342,6 +459,7 @@ async function start_stream() {
 
   // video.srcObject = stream;
   imageFile = "IMG_0237_SHORT.MOV"
+  imageFile = "IMG_0237.MOV"
   video.src = imageFile;
   video.loop = true;
   video.muted = false;
